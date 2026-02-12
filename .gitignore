@@ -1,0 +1,62 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+
+# Build outputs
+.next/
+dist/
+build/
+out/
+coverage/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Databases and local storage
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sql
+!db/
+!db/migrations/
+!db/migrations/*.sql
+/data/
+/storage/
+
+# Caches / temp
+.cache/
+.tmp/
+tmp/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+
+# Docker overrides and local compose files
+docker-compose.override.yml
+*.local.yml

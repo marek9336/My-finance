@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Finance - Translations</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#eef3f9; --surface:#fff; --text:#10243d; --muted:#5a6f8f; --primary:#0f6ecf; --border:#d8e2f0; --shadow:0 8px 24px rgba(16,36,61,.08); --err:#b3261e; --ok:#1b8f47; }
+    body.dark { --bg:#0c1625; --surface:#13253a; --text:#e6f0ff; --muted:#a4bddf; --primary:#5ea8ff; --border:#274565; --shadow:0 8px 24px rgba(0,0,0,.35); --err:#ff8a80; --ok:#6ed69b; }
+    *{box-sizing:border-box} body{margin:0;padding:24px;font-family:"Roboto",sans-serif;background:var(--bg);color:var(--text)}
+    .container{max-width:1120px;margin:0 auto;display:grid;gap:16px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:20px}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .top-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .user-menu{position:relative}.menu-btn{width:auto;margin:0;background:transparent;border:1px solid var(--border);color:var(--text)}
+    .menu{position:absolute;right:0;top:42px;background:var(--surface);border:1px solid var(--border);border-radius:10px;min-width:180px;box-shadow:var(--shadow);display:none}.menu.open{display:block}
+    .menu button{margin:0;border-radius:0;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--text);text-align:left}.menu button:last-child{border-bottom:0;color:var(--err)}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    input,select,textarea,button{border-radius:10px;font-size:14px;border:1px solid var(--border);padding:10px 12px;margin-bottom:8px}
+    select,textarea{width:100%} textarea{min-height:280px;background:#fff;color:var(--text)}
+    body.dark select, body.dark textarea { background:#0f1f33; color:#f0f6ff; border-color:#385c83; }
+    body.dark select option { background:#0f1f33; color:#f0f6ff; }
+    button{background:var(--primary);color:#fff;border:0;font-weight:500;cursor:pointer}
+    .msg{font-size:14px}.msg.ok{color:var(--ok)}.msg.err{color:var(--err)}
+    a.nav{color:var(--primary);text-decoration:none;font-weight:500}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="topbar">
+        <div><h1 id="title">Translations</h1><p id="subtitle">Edit custom locale overrides and publish to file.</p></div>
+        <div class="top-actions">
+          <a class="nav" href="/ui/dashboard" id="navDashboard">Dashboard</a>
+          <a class="nav" href="/ui/settings" id="navSettings">Settings</a>
+          <a class="nav" href="/ui/backup" id="navBackup">Backup</a>
+          <a class="nav" href="/ui/translations" id="navTranslations">Translations</a>
+          <div class="user-menu"><button class="menu-btn" id="userBtn" type="button">...</button><div class="menu" id="userMenu"><button id="logoutBtn" type="button">Logout</button></div></div>
+        </div>
+      </div>
+      <div id="msg" class="msg"></div>
+    </div>
+    <div class="card">
+      <div class="row">
+        <label for="locale" id="labelLocale">Locale</label>
+        <select id="locale" style="max-width:240px"></select>
+        <button id="loadBtn" type="button">Load</button>
+      </div>
+      <label for="json" id="labelJson">Custom JSON object (key-value)</label>
+      <textarea id="json">{}</textarea>
+      <div class="row">
+        <button id="saveBtn" type="button">Save Custom</button>
+        <button id="publishBtn" type="button">Publish To File</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const I18N={en:{title:"Translations",subtitle:"Edit custom locale overrides and publish to file.",dashboard:"Dashboard",settings:"Settings",backup:"Backup",translations:"Translations",logout:"Logout",locale:"Locale",json:"Custom JSON object (key-value)",load:"Load",save:"Save Custom",publish:"Publish To File",loaded:"Locale loaded.",saved:"Custom translation saved.",published:"Published to ",authReq:"Authentication required."},cs:{title:"Překlady",subtitle:"Uprav vlastní překlady a publikuj je do souboru.",dashboard:"Přehled",settings:"Nastavení",backup:"Záloha",translations:"Překlady",logout:"Odhlásit",locale:"Jazyk",json:"Vlastní JSON (klíč-hodnota)",load:"Načíst",save:"Uložit vlastní",publish:"Publikovat do souboru",loaded:"Jazyk načten.",saved:"Vlastní překlad uložen.",published:"Publikováno do ",authReq:"Je vyžadováno přihlášení."}};
+    function t(k){const l=localStorage.getItem("mf_lang")||"en";return (I18N[l]&&I18N[l][k])||I18N.en[k]||k;}
+    function applyTheme(){const theme=localStorage.getItem("mf_theme")||"system";document.body.classList.remove("dark");if(theme==="dark"||(theme==="system"&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches)){document.body.classList.add("dark");}}
+    function applyTexts(){document.documentElement.lang=localStorage.getItem("mf_lang")||"en";document.getElementById("title").textContent=t("title");document.getElementById("subtitle").textContent=t("subtitle");document.getElementById("navDashboard").textContent=t("dashboard");document.getElementById("navSettings").textContent=t("settings");document.getElementById("navBackup").textContent=t("backup");document.getElementById("navTranslations").textContent=t("translations");document.getElementById("logoutBtn").textContent=t("logout");document.getElementById("labelLocale").textContent=t("locale");document.getElementById("labelJson").textContent=t("json");document.getElementById("loadBtn").textContent=t("load");document.getElementById("saveBtn").textContent=t("save");document.getElementById("publishBtn").textContent=t("publish");}
+    function setMsg(text,isError=false){const m=document.getElementById("msg");m.textContent=text;m.className=`msg ${isError?"err":"ok"}`;}
+    function mapError(msg){const m=(msg||"").toLowerCase();if(m.includes("authentication required"))return t("authReq");return msg;}
+    async function parseError(res){try{const d=await res.json();if(d?.error?.details?.length)return d.error.details.map(x=>`${x.field}: ${x.message}`).join("; ");if(d?.detail)return mapError(d.detail);}catch(_){ }return `HTTP ${res.status}`;}
+    async function api(path,method="GET",body=null){const res=await fetch(path,{method,headers:{"Content-Type":"application/json"},body:body?JSON.stringify(body):null,credentials:"include"});if(!res.ok)throw new Error(await parseError(res));return await res.json();}
+    async function loadUser(){const me=await api("/api/v1/auth/me");document.getElementById("userBtn").textContent=me.fullName?`${me.fullName} (${me.email})`:me.email;}
+    async function loadLocales(){const data=await api("/api/v1/i18n/locales");const select=document.getElementById("locale");select.innerHTML="";data.locales.forEach(loc=>{const o=document.createElement("option");o.value=loc;o.textContent=loc;select.appendChild(o);});const preferred=localStorage.getItem("mf_lang")||"en";if([...select.options].some(o=>o.value===preferred))select.value=preferred;await loadLocale();}
+    async function loadLocale(){const locale=document.getElementById("locale").value;const data=await api(`/api/v1/i18n/${locale}`);document.getElementById("json").value=JSON.stringify(data.messages,null,2);setMsg(t("loaded"));}
+    async function saveCustom(){const locale=document.getElementById("locale").value;let payload={};try{payload=JSON.parse(document.getElementById("json").value);}catch(_){throw new Error("Invalid JSON.");}await api(`/api/v1/i18n/${locale}/custom`,"PUT",payload);setMsg(t("saved"));}
+    async function publishCustom(){const locale=document.getElementById("locale").value;const data=await api(`/api/v1/i18n/${locale}/custom/publish`,"POST");setMsg(`${t("published")}${data.path}`);}
+    async function logout(){await api("/api/v1/auth/logout","POST");window.location.href="/ui/get-started";}
+    async function safe(fn){try{await fn();}catch(e){setMsg(mapError(e.message),true);}}
+    const menu=document.getElementById("userMenu");document.getElementById("userBtn").addEventListener("click",()=>menu.classList.toggle("open"));document.addEventListener("click",(e)=>{if(!e.target.closest(".user-menu"))menu.classList.remove("open");});
+    document.getElementById("logoutBtn").addEventListener("click",()=>safe(logout));document.getElementById("loadBtn").addEventListener("click",()=>safe(loadLocale));document.getElementById("saveBtn").addEventListener("click",()=>safe(saveCustom));document.getElementById("publishBtn").addEventListener("click",()=>safe(publishCustom));
+    applyTheme();applyTexts();safe(loadUser);safe(loadLocales);
+  </script>
+</body>
+</html>

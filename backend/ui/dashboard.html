@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Finance - Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#eef3f9; --surface:#fff; --text:#10243d; --muted:#5a6f8f; --primary:#0f6ecf; --border:#d8e2f0; --shadow:0 8px 24px rgba(16,36,61,.08); --err:#b3261e; --ok:#1b8f47; }
+    body.dark { --bg:#0c1625; --surface:#13253a; --text:#e6f0ff; --muted:#a4bddf; --primary:#5ea8ff; --border:#274565; --shadow:0 8px 24px rgba(0,0,0,.35); --err:#ff8a80; --ok:#6ed69b; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: "Roboto", sans-serif; background: var(--bg); color: var(--text); }
+    .container { max-width: 1120px; margin: 0 auto; display: grid; gap: 16px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 20px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .top-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .user-menu { position: relative; }
+    .menu-btn { width: auto; margin: 0; background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .menu { position: absolute; right: 0; top: 42px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; min-width: 180px; box-shadow: var(--shadow); display: none; z-index: 20; }
+    .menu.open { display: block; }
+    .menu button { margin: 0; border-radius: 0; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text); text-align: left; }
+    .menu button:last-child { border-bottom: 0; color: var(--err); }
+    .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+    .box { border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+    input, select, button, textarea { width: 100%; border-radius: 10px; font-size: 14px; border: 1px solid var(--border); padding: 10px 12px; margin-bottom: 8px; }
+    input, select, textarea { background: #fff; color: var(--text); }
+    body.dark input, body.dark select, body.dark textarea { background: #0f1f33; color: #f0f6ff; border-color: #385c83; }
+    body.dark select option { background: #0f1f33; color: #f0f6ff; }
+    button { background: var(--primary); color: #fff; border: 0; font-weight: 500; cursor: pointer; }
+    button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    pre { background: #0d1b2f; color: #d7e8ff; padding: 12px; border-radius: 10px; overflow: auto; min-height: 160px; }
+    body.dark pre { background: #0a1320; color: #cae0ff; }
+    .msg { font-size: 14px; margin-top: 8px; }
+    .msg.ok { color: var(--ok); }
+    .msg.err { color: var(--err); }
+    .nav { color: var(--primary); text-decoration: none; font-weight: 500; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid var(--border); text-align: left; padding: 8px; }
+    #editPanel { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="topbar">
+        <div>
+          <h1 id="title">Dashboard</h1>
+          <p id="subtitle">Accounts and transactions.</p>
+        </div>
+        <div class="top-actions">
+          <a class="nav" href="/ui/dashboard" id="navDashboard">Dashboard</a>
+          <a class="nav" href="/ui/settings" id="navSettings">Settings</a>
+          <div class="user-menu">
+            <button class="menu-btn" id="userBtn" type="button">...</button>
+            <div class="menu" id="userMenu"><button id="logoutBtn" type="button">Logout</button></div>
+          </div>
+        </div>
+      </div>
+      <div id="msg" class="msg"></div>
+    </div>
+
+    <div class="card row">
+      <div class="box">
+        <h3 id="createAccountTitle">Create Account</h3>
+        <input id="accName" placeholder="Main account" />
+        <select id="accType"><option value="checking">checking</option><option value="cash">cash</option><option value="savings">savings</option></select>
+        <input id="accCurrency" value="CZK" />
+        <input id="accBalance" type="number" step="0.01" value="0" />
+        <button id="accBtn" type="button">Create Account</button>
+      </div>
+      <div class="box">
+        <h3 id="createTxTitle">Create Transaction</h3>
+        <select id="txAccount"></select>
+        <select id="txDirection"><option value="expense">expense</option><option value="income">income</option></select>
+        <input id="txAmount" type="number" step="0.01" value="100" />
+        <input id="txCurrency" value="CZK" />
+        <input id="txCategory" placeholder="Category (optional)" />
+        <input id="txNote" placeholder="Note (optional)" />
+        <button id="txBtn" type="button">Create Transaction</button>
+      </div>
+    </div>
+
+    <div id="editPanel" class="card">
+      <h3 id="editTitle">Edit</h3>
+      <input id="editName" />
+      <textarea id="editNote" rows="3"></textarea>
+      <div class="row">
+        <button id="saveEditBtn" type="button">Save</button>
+        <button id="cancelEditBtn" type="button" class="secondary">Cancel</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <button id="refreshBtn" class="secondary" type="button">Refresh Data</button>
+      <button id="toggleAdvancedBtn" class="secondary" type="button">Advanced JSON</button>
+      <h3 id="accountsHeading">Accounts</h3>
+      <div style="overflow:auto"><table id="accountsTable"></table></div>
+      <h3 id="transactionsHeading">Transactions</h3>
+      <div style="overflow:auto"><table id="transactionsTable"></table></div>
+      <pre id="out" style="display:none">Loading...</pre>
+    </div>
+  </div>
+  <script>
+    const I18N = {
+      en: {
+        title: "Dashboard", subtitle: "Accounts and transactions.", dashboard: "Dashboard", settings: "Settings",
+        createAccount: "Create Account", createTx: "Create Transaction", refresh: "Refresh Data", logout: "Logout",
+        edit: "Edit", advanced: "Advanced JSON", accounts: "Accounts", transactions: "Transactions",
+        accountCreated: "Account created.", txCreated: "Transaction created.", createAccountFirst: "Create account first.",
+        authReq: "Authentication required.", name: "Name", type: "Type", currency: "Currency", balance: "Balance",
+        date: "Date", direction: "Direction", amount: "Amount", category: "Category", note: "Note",
+        phAccount: "Main account", phCategory: "Category (optional)", phNote: "Note (optional)",
+        save: "Save", cancel: "Cancel", editAccount: "Edit account", editTransaction: "Edit transaction", saved: "Saved."
+      },
+      cs: {
+        title: "Přehled", subtitle: "Účty a transakce.", dashboard: "Přehled", settings: "Nastavení",
+        createAccount: "Vytvořit účet", createTx: "Vytvořit transakci", refresh: "Obnovit data", logout: "Odhlásit",
+        edit: "Upravit", advanced: "Pokročilý JSON", accounts: "Účty", transactions: "Transakce",
+        accountCreated: "Účet byl vytvořen.", txCreated: "Transakce byla vytvořena.", createAccountFirst: "Nejdříve vytvoř účet.",
+        authReq: "Je vyžadováno přihlášení.", name: "Název", type: "Typ", currency: "Měna", balance: "Zůstatek",
+        date: "Datum", direction: "Směr", amount: "Částka", category: "Kategorie", note: "Poznámka",
+        phAccount: "Hlavní účet", phCategory: "Kategorie (volitelné)", phNote: "Poznámka (volitelné)",
+        save: "Uložit", cancel: "Zrušit", editAccount: "Upravit účet", editTransaction: "Upravit transakci", saved: "Uloženo."
+      }
+    };
+    let editState = null;
+    function lang() { return localStorage.getItem("mf_lang") || "en"; }
+    function t(key) { return (I18N[lang()] && I18N[lang()][key]) || I18N.en[key] || key; }
+    function applyTheme() {
+      const theme = localStorage.getItem("mf_theme") || "system";
+      document.body.classList.remove("dark");
+      if (theme === "dark" || (theme === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+        document.body.classList.add("dark");
+      }
+    }
+    function applyTexts() {
+      document.documentElement.lang = lang();
+      document.getElementById("title").textContent = t("title");
+      document.getElementById("subtitle").textContent = t("subtitle");
+      document.getElementById("navDashboard").textContent = t("dashboard");
+      document.getElementById("navSettings").textContent = t("settings");
+      document.getElementById("createAccountTitle").textContent = t("createAccount");
+      document.getElementById("createTxTitle").textContent = t("createTx");
+      document.getElementById("refreshBtn").textContent = t("refresh");
+      document.getElementById("logoutBtn").textContent = t("logout");
+      document.getElementById("toggleAdvancedBtn").textContent = t("advanced");
+      document.getElementById("accountsHeading").textContent = t("accounts");
+      document.getElementById("transactionsHeading").textContent = t("transactions");
+      document.getElementById("accBtn").textContent = t("createAccount");
+      document.getElementById("txBtn").textContent = t("createTx");
+      document.getElementById("accName").placeholder = t("phAccount");
+      document.getElementById("txCategory").placeholder = t("phCategory");
+      document.getElementById("txNote").placeholder = t("phNote");
+      document.getElementById("saveEditBtn").textContent = t("save");
+      document.getElementById("cancelEditBtn").textContent = t("cancel");
+    }
+    function setMsg(text, isError = false) {
+      const m = document.getElementById("msg");
+      m.textContent = text;
+      m.className = `msg ${isError ? "err" : "ok"}`;
+    }
+    function mapError(msg) {
+      const m = (msg || "").toLowerCase();
+      if (m.includes("authentication required") || m.includes("invalid or expired token")) return t("authReq");
+      return msg;
+    }
+    async function parseError(res) {
+      try {
+        const d = await res.json();
+        if (d && d.error && d.error.details && d.error.details.length) return d.error.details.map((x) => `${x.field}: ${x.message}`).join("; ");
+        if (d && d.detail) return mapError(d.detail);
+      } catch (_) {}
+      return `HTTP ${res.status}`;
+    }
+    async function api(path, method = "GET", body = null) {
+      const r = await fetch(path, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : null, credentials: "include" });
+      if (!r.ok) throw new Error(await parseError(r));
+      return await r.json();
+    }
+    async function loadUser() {
+      const me = await api("/api/v1/auth/me");
+      document.getElementById("userBtn").textContent = me.fullName ? `${me.fullName} (${me.email})` : me.email;
+    }
+    function renderAccounts(accounts) {
+      const table = document.getElementById("accountsTable");
+      table.innerHTML = `<thead><tr><th>${t("name")}</th><th>${t("type")}</th><th>${t("currency")}</th><th>${t("balance")}</th><th></th></tr></thead><tbody></tbody>`;
+      const tb = table.querySelector("tbody");
+      accounts.forEach((a) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${a.name}</td><td>${a.accountType}</td><td>${a.currency}</td><td>${a.currentBalance}</td><td><button data-id="${a.id}" data-name="${encodeURIComponent(a.name)}" class="edit-account secondary" style="width:auto">${t("edit")}</button></td>`;
+        tb.appendChild(tr);
+      });
+    }
+    function renderTransactions(transactions) {
+      const table = document.getElementById("transactionsTable");
+      table.innerHTML = `<thead><tr><th>${t("date")}</th><th>${t("direction")}</th><th>${t("amount")}</th><th>${t("category")}</th><th>${t("note")}</th><th></th></tr></thead><tbody></tbody>`;
+      const tb = table.querySelector("tbody");
+      transactions.forEach((tx) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${new Date(tx.occurredAt).toLocaleString()}</td><td>${tx.direction}</td><td>${tx.amount} ${tx.currency}</td><td>${tx.category || ""}</td><td>${tx.note || ""}</td><td><button data-id="${tx.id}" data-note="${encodeURIComponent(tx.note || "")}" class="edit-tx secondary" style="width:auto">${t("edit")}</button></td>`;
+        tb.appendChild(tr);
+      });
+    }
+    async function refreshAll() {
+      const [accounts, transactions] = await Promise.all([api("/api/v1/accounts"), api("/api/v1/transactions")]);
+      const sel = document.getElementById("txAccount");
+      sel.innerHTML = "";
+      accounts.forEach((a) => {
+        const o = document.createElement("option");
+        o.value = a.id;
+        o.textContent = `${a.name} (${a.currentBalance} ${a.currency})`;
+        sel.appendChild(o);
+      });
+      renderAccounts(accounts);
+      renderTransactions(transactions);
+      document.getElementById("out").textContent = JSON.stringify({ accounts, transactions }, null, 2);
+    }
+    function openEditPanelAccount(accountId, currentName) {
+      editState = { type: "account", id: accountId };
+      document.getElementById("editPanel").style.display = "block";
+      document.getElementById("editTitle").textContent = t("editAccount");
+      document.getElementById("editName").style.display = "block";
+      document.getElementById("editNote").style.display = "none";
+      document.getElementById("editName").value = currentName || "";
+    }
+    function openEditPanelTransaction(transactionId, currentNote) {
+      editState = { type: "transaction", id: transactionId };
+      document.getElementById("editPanel").style.display = "block";
+      document.getElementById("editTitle").textContent = t("editTransaction");
+      document.getElementById("editName").style.display = "none";
+      document.getElementById("editNote").style.display = "block";
+      document.getElementById("editNote").value = currentNote || "";
+    }
+    async function saveEdit() {
+      if (!editState) return;
+      if (editState.type === "account") {
+        await api(`/api/v1/accounts/${editState.id}`, "PUT", { name: document.getElementById("editName").value.trim() });
+      } else if (editState.type === "transaction") {
+        await api(`/api/v1/transactions/${editState.id}`, "PUT", { note: document.getElementById("editNote").value });
+      }
+      setMsg(t("saved"));
+      closeEdit();
+      await refreshAll();
+    }
+    function closeEdit() {
+      editState = null;
+      document.getElementById("editPanel").style.display = "none";
+    }
+    async function createAccount() {
+      await api("/api/v1/accounts", "POST", {
+        name: document.getElementById("accName").value,
+        accountType: document.getElementById("accType").value,
+        currency: document.getElementById("accCurrency").value,
+        initialBalance: Number(document.getElementById("accBalance").value || 0)
+      });
+      setMsg(t("accountCreated"));
+      await refreshAll();
+    }
+    async function createTx() {
+      const accountId = document.getElementById("txAccount").value;
+      if (!accountId) throw new Error(t("createAccountFirst"));
+      await api("/api/v1/transactions", "POST", {
+        accountId,
+        direction: document.getElementById("txDirection").value,
+        amount: Number(document.getElementById("txAmount").value || 0),
+        currency: document.getElementById("txCurrency").value,
+        occurredAt: new Date().toISOString(),
+        category: document.getElementById("txCategory").value || null,
+        note: document.getElementById("txNote").value || null
+      });
+      setMsg(t("txCreated"));
+      await refreshAll();
+    }
+    async function logout() {
+      await api("/api/v1/auth/logout", "POST");
+      window.location.href = "/ui/get-started";
+    }
+    async function safe(fn) { try { await fn(); } catch (e) { setMsg(mapError(e.message), true); } }
+
+    const menu = document.getElementById("userMenu");
+    document.getElementById("userBtn").addEventListener("click", () => menu.classList.toggle("open"));
+    document.addEventListener("click", (e) => { if (!e.target.closest(".user-menu")) menu.classList.remove("open"); });
+    document.getElementById("logoutBtn").addEventListener("click", () => safe(logout));
+    document.getElementById("accBtn").addEventListener("click", () => safe(createAccount));
+    document.getElementById("txBtn").addEventListener("click", () => safe(createTx));
+    document.getElementById("refreshBtn").addEventListener("click", () => safe(refreshAll));
+    document.getElementById("toggleAdvancedBtn").addEventListener("click", () => {
+      const p = document.getElementById("out");
+      p.style.display = p.style.display === "none" ? "block" : "none";
+    });
+    document.getElementById("accountsTable").addEventListener("click", (e) => {
+      const b = e.target.closest(".edit-account");
+      if (b) openEditPanelAccount(b.dataset.id, decodeURIComponent(b.dataset.name || ""));
+    });
+    document.getElementById("transactionsTable").addEventListener("click", (e) => {
+      const b = e.target.closest(".edit-tx");
+      if (b) openEditPanelTransaction(b.dataset.id, decodeURIComponent(b.dataset.note || ""));
+    });
+    document.getElementById("saveEditBtn").addEventListener("click", () => safe(saveEdit));
+    document.getElementById("cancelEditBtn").addEventListener("click", closeEdit);
+
+    applyTheme();
+    applyTexts();
+    safe(loadUser);
+    safe(refreshAll);
+  </script>
+</body>
+</html>

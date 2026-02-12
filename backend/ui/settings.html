@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Finance - Settings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#eef3f9; --surface:#fff; --text:#10243d; --muted:#5a6f8f; --primary:#0f6ecf; --border:#d8e2f0; --shadow:0 8px 24px rgba(16,36,61,.08); --err:#b3261e; --ok:#1b8f47; }
+    body.dark { --bg:#0c1625; --surface:#13253a; --text:#e6f0ff; --muted:#a4bddf; --primary:#5ea8ff; --border:#274565; --shadow:0 8px 24px rgba(0,0,0,.35); --err:#ff8a80; --ok:#6ed69b; }
+    *{box-sizing:border-box} body{margin:0;padding:24px;font-family:"Roboto",sans-serif;background:var(--bg);color:var(--text)}
+    .container{max-width:1120px;margin:0 auto;display:grid;gap:16px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:20px}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .top-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .user-menu{position:relative}.menu-btn{width:auto;margin:0;background:transparent;border:1px solid var(--border);color:var(--text)}
+    .menu{position:absolute;right:0;top:42px;background:var(--surface);border:1px solid var(--border);border-radius:10px;min-width:180px;box-shadow:var(--shadow);display:none}.menu.open{display:block}
+    .menu button{margin:0;border-radius:0;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--text);text-align:left}.menu button:last-child{border-bottom:0;color:var(--err)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    input,select,textarea,button{border-radius:10px;font-size:14px;border:1px solid var(--border);padding:10px 12px;margin-bottom:8px}
+    input,select,textarea{width:100%;background:#fff;color:var(--text)}
+    body.dark input, body.dark select, body.dark textarea{background:#0f1f33;color:#f0f6ff;border-color:#385c83}
+    body.dark select option { background:#0f1f33;color:#f0f6ff; }
+    textarea{min-height:220px}
+    button{background:var(--primary);color:#fff;border:0;font-weight:500;cursor:pointer}
+    button.secondary{background:transparent;border:1px solid var(--border);color:var(--text)}
+    .check{display:flex;align-items:center;gap:8px;margin-top:8px}.check input{width:18px;height:18px;margin:0}
+    .msg{font-size:14px}.msg.ok{color:var(--ok)}.msg.err{color:var(--err)}
+    a.nav{color:var(--primary);text-decoration:none;font-weight:500}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="topbar">
+        <div><h1 id="title">Settings</h1><p id="subtitle">Language, timezone, appearance, backup and translations.</p></div>
+        <div class="top-actions">
+          <a class="nav" href="/ui/dashboard" id="navDashboard">Dashboard</a>
+          <a class="nav" href="/ui/settings" id="navSettings">Settings</a>
+          <div class="user-menu"><button class="menu-btn" id="userBtn" type="button">...</button><div class="menu" id="userMenu"><button id="logoutBtn" type="button">Logout</button></div></div>
+        </div>
+      </div>
+      <div id="msg" class="msg"></div>
+    </div>
+
+    <div class="card">
+      <h2 id="generalTitle">General</h2>
+      <div class="grid">
+        <div><label id="labelLang" for="locale">Language</label><select id="locale"><option value="en">English</option><option value="cs">Čeština</option></select></div>
+        <div><label id="labelProvider" for="provider">Calendar provider</label><select id="provider"><option value="google">google</option><option value="none">none</option></select></div>
+        <div><label id="labelTz" for="tz">Timezone</label><select id="tz"></select><button class="secondary" id="detectTzBtn" type="button">Detect Timezone</button></div>
+        <div><label id="labelTheme" for="theme">Appearance</label><select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
+      </div>
+      <div class="check"><input type="checkbox" id="syncEnabled"><label id="labelSync" for="syncEnabled">Calendar sync enabled</label></div>
+      <div class="check"><input type="checkbox" id="registrationEnabled"><label id="labelReg" for="registrationEnabled">Self registration enabled</label></div>
+      <div class="check"><input type="checkbox" id="smtpEnabled"><label id="labelSmtp" for="smtpEnabled">SMTP enabled</label></div>
+      <button id="saveGeneralBtn" type="button">Save Settings</button>
+    </div>
+
+    <div class="card">
+      <h2 id="backupTitle">Backup</h2>
+      <div class="check"><input type="checkbox" id="autoBackupEnabled"><label id="labelAuto" for="autoBackupEnabled">Enable automatic backups</label></div>
+      <div class="grid">
+        <div><label id="labelInterval" for="backupInterval">Backup interval (minutes)</label><input id="backupInterval" type="number" min="5" step="1"></div>
+        <div><label id="labelRetention" for="backupRetention">Retention (days)</label><input id="backupRetention" type="number" min="1" step="1"></div>
+      </div>
+      <div class="row">
+        <button id="saveBackupBtn" type="button">Save Backup Settings</button>
+        <button id="downloadBtn" type="button">Download Backup</button>
+        <button id="runNowBtn" type="button">Run Backup Now</button>
+      </div>
+      <div class="row">
+        <input id="backupFile" type="file" accept=".json,application/json" />
+        <button id="restoreBtn" type="button">Restore From File</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 id="translationsTitle">Translations</h2>
+      <div class="row">
+        <label id="labelLocale" for="translationLocale">Locale</label>
+        <select id="translationLocale" style="max-width:240px"></select>
+      </div>
+      <textarea id="translationJson">{}</textarea>
+      <div class="row">
+        <button id="saveTranslationsBtn" type="button">Save Custom</button>
+        <button id="publishTranslationsBtn" type="button">Publish To File</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const I18N={en:{title:"Settings",subtitle:"Language, timezone, appearance, backup and translations.",dashboard:"Dashboard",settings:"Settings",logout:"Logout",general:"General",lang:"Language",provider:"Calendar provider",timezone:"Timezone",appearance:"Appearance",detectTz:"Detect Timezone",sync:"Calendar sync enabled",reg:"Self registration enabled",smtp:"SMTP enabled",saveSettings:"Save Settings",backup:"Backup",autoEnable:"Enable automatic backups",interval:"Backup interval (minutes)",retention:"Retention (days)",saveBackup:"Save Backup Settings",download:"Download Backup",runNow:"Run Backup Now",restore:"Restore From File",translations:"Translations",locale:"Locale",saveCustom:"Save Custom",publish:"Publish To File",saved:"Settings saved.",themeUpdated:"Theme updated.",tzDetected:"Timezone detected: ",restoreDone:"Restore complete.",backupDownloaded:"Backup downloaded.",backupRun:"Backup created: ",translationsSaved:"Custom translation saved.",translationsPublished:"Published to ",selectBackup:"Select backup file.",invalidJson:"Invalid JSON.",authReq:"Authentication required."},cs:{title:"Nastavení",subtitle:"Jazyk, časové pásmo, vzhled, záloha a překlady.",dashboard:"Přehled",settings:"Nastavení",logout:"Odhlásit",general:"Obecné",lang:"Jazyk",provider:"Poskytovatel kalendáře",timezone:"Časové pásmo",appearance:"Vzhled",detectTz:"Zjistit časové pásmo",sync:"Synchronizace kalendáře zapnuta",reg:"Samoobslužná registrace povolena",smtp:"SMTP zapnuto",saveSettings:"Uložit nastavení",backup:"Záloha",autoEnable:"Povolit automatické zálohy",interval:"Interval zálohy (minuty)",retention:"Retence (dny)",saveBackup:"Uložit nastavení záloh",download:"Stáhnout zálohu",runNow:"Spustit zálohu nyní",restore:"Obnovit ze souboru",translations:"Překlady",locale:"Jazyk",saveCustom:"Uložit vlastní",publish:"Publikovat do souboru",saved:"Nastavení uloženo.",themeUpdated:"Vzhled aktualizován.",tzDetected:"Detekované časové pásmo: ",restoreDone:"Obnova dokončena.",backupDownloaded:"Záloha stažena.",backupRun:"Záloha vytvořena: ",translationsSaved:"Vlastní překlad uložen.",translationsPublished:"Publikováno do ",selectBackup:"Vyber soubor se zálohou.",invalidJson:"Neplatný JSON.",authReq:"Je vyžadováno přihlášení."}};
+    const TZ_CHOICES=[{value:"UTC",label_en:"(UTC+00:00) UTC / London",label_cs:"(UTC+00:00) UTC / Londýn"},{value:"Europe/Prague",label_en:"(UTC+01:00) Prague / Paris / Budapest",label_cs:"(UTC+01:00) Praha / Paříž / Budapešť"},{value:"Europe/Athens",label_en:"(UTC+02:00) Athens / Bucharest",label_cs:"(UTC+02:00) Athény / Bukurešť"},{value:"America/New_York",label_en:"(UTC-05:00) New York",label_cs:"(UTC-05:00) New York"},{value:"America/Chicago",label_en:"(UTC-06:00) Chicago",label_cs:"(UTC-06:00) Chicago"},{value:"America/Los_Angeles",label_en:"(UTC-08:00) Los Angeles",label_cs:"(UTC-08:00) Los Angeles"},{value:"Asia/Tokyo",label_en:"(UTC+09:00) Tokyo",label_cs:"(UTC+09:00) Tokio"}];
+    function lang(){return localStorage.getItem("mf_lang")||"en";} function t(k){return (I18N[lang()]&&I18N[lang()][k])||I18N.en[k]||k;}
+    function applyTheme(){const theme=localStorage.getItem("mf_theme")||"system";document.body.classList.remove("dark");if(theme==="dark"||(theme==="system"&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches)){document.body.classList.add("dark");}}
+    function applyTexts(){document.documentElement.lang=lang();document.getElementById("title").textContent=t("title");document.getElementById("subtitle").textContent=t("subtitle");document.getElementById("navDashboard").textContent=t("dashboard");document.getElementById("navSettings").textContent=t("settings");document.getElementById("logoutBtn").textContent=t("logout");document.getElementById("generalTitle").textContent=t("general");document.getElementById("labelLang").textContent=t("lang");document.getElementById("labelProvider").textContent=t("provider");document.getElementById("labelTz").textContent=t("timezone");document.getElementById("labelTheme").textContent=t("appearance");document.getElementById("detectTzBtn").textContent=t("detectTz");document.getElementById("labelSync").textContent=t("sync");document.getElementById("labelReg").textContent=t("reg");document.getElementById("labelSmtp").textContent=t("smtp");document.getElementById("saveGeneralBtn").textContent=t("saveSettings");document.getElementById("backupTitle").textContent=t("backup");document.getElementById("labelAuto").textContent=t("autoEnable");document.getElementById("labelInterval").textContent=t("interval");document.getElementById("labelRetention").textContent=t("retention");document.getElementById("saveBackupBtn").textContent=t("saveBackup");document.getElementById("downloadBtn").textContent=t("download");document.getElementById("runNowBtn").textContent=t("runNow");document.getElementById("restoreBtn").textContent=t("restore");document.getElementById("translationsTitle").textContent=t("translations");document.getElementById("labelLocale").textContent=t("locale");document.getElementById("saveTranslationsBtn").textContent=t("saveCustom");document.getElementById("publishTranslationsBtn").textContent=t("publish");fillTimezoneSelect(document.getElementById("tz").value||"Europe/Prague");}
+    function fillTimezoneSelect(selected){const sel=document.getElementById("tz");sel.innerHTML="";TZ_CHOICES.forEach(z=>{const o=document.createElement("option");o.value=z.value;o.textContent=lang()==="cs"?z.label_cs:z.label_en;sel.appendChild(o);});if(![...sel.options].some(o=>o.value===selected)){const o=document.createElement("option");o.value=selected;o.textContent=selected;sel.appendChild(o);}sel.value=selected;}
+    function normalizeTimezone(tz){const cet=new Set(["Europe/Prague","Europe/Budapest","Europe/Paris","Europe/Berlin","Europe/Warsaw","Europe/Bratislava","Europe/Vienna"]);if(cet.has(tz))return "Europe/Prague";return tz;}
+    function detectSystemTimezone(){try{return normalizeTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone||"Europe/Prague");}catch(_){return "Europe/Prague";}}
+    function setMsg(text,isError=false){const m=document.getElementById("msg");m.textContent=text;m.className=`msg ${isError?"err":"ok"}`;}
+    function mapError(msg){const m=(msg||"").toLowerCase();if(m.includes("authentication required"))return t("authReq");return msg;}
+    async function parseError(res){try{const d=await res.json();if(d?.error?.details?.length)return d.error.details.map(x=>`${x.field}: ${x.message}`).join("; ");if(d?.detail)return mapError(d.detail);}catch(_){ }return `HTTP ${res.status}`;}
+    async function api(path,method="GET",body=null,formData=null){const init={method,credentials:"include"};if(formData){init.body=formData;}else{init.headers={"Content-Type":"application/json"};init.body=body?JSON.stringify(body):null;}const res=await fetch(path,init);if(!res.ok)throw new Error(await parseError(res));if(res.headers.get("content-type")?.includes("application/json"))return await res.json();return res;}
+    async function loadUser(){const me=await api("/api/v1/auth/me");document.getElementById("userBtn").textContent=me.fullName?`${me.fullName} (${me.email})`:me.email;}
+    async function loadSettings(){const data=await api("/api/v1/settings/app");if(data.defaultLocale)localStorage.setItem("mf_lang",data.defaultLocale);document.getElementById("locale").value=data.defaultLocale||lang();document.getElementById("provider").value=data.calendarProvider;document.getElementById("syncEnabled").checked=data.calendarSyncEnabled;document.getElementById("registrationEnabled").checked=data.selfRegistrationEnabled;document.getElementById("smtpEnabled").checked=data.smtpEnabled;document.getElementById("autoBackupEnabled").checked=data.autoBackupEnabled;document.getElementById("backupInterval").value=data.autoBackupIntervalMinutes;document.getElementById("backupRetention").value=data.autoBackupRetentionDays;document.getElementById("theme").value=localStorage.getItem("mf_theme")||"system";fillTimezoneSelect(data.defaultTimezone||detectSystemTimezone());applyTheme();applyTexts();}
+    async function saveGeneral(){const payload={defaultLocale:document.getElementById("locale").value,defaultTimezone:document.getElementById("tz").value,calendarProvider:document.getElementById("provider").value,calendarSyncEnabled:document.getElementById("syncEnabled").checked,selfRegistrationEnabled:document.getElementById("registrationEnabled").checked,smtpEnabled:document.getElementById("smtpEnabled").checked,autoBackupEnabled:document.getElementById("autoBackupEnabled").checked,autoBackupIntervalMinutes:Number(document.getElementById("backupInterval").value||1440),autoBackupRetentionDays:Number(document.getElementById("backupRetention").value||30)};await api("/api/v1/settings/app","PUT",payload);localStorage.setItem("mf_lang",payload.defaultLocale);applyTexts();setMsg(t("saved"));}
+    async function saveBackup(){await saveGeneral();}
+    async function downloadBackup(){const res=await fetch("/api/v1/admin/backup/download",{credentials:"include"});if(!res.ok)throw new Error(await parseError(res));const blob=await res.blob();const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="my-finance-backup.json";a.click();URL.revokeObjectURL(url);setMsg(t("backupDownloaded"));}
+    async function runBackupNow(){const d=await api("/api/v1/admin/backup/run-now","POST");setMsg(`${t("backupRun")}${d.file}`);}
+    async function restoreBackup(){const f=document.getElementById("backupFile").files[0];if(!f)throw new Error(t("selectBackup"));const fd=new FormData();fd.append("file",f);await api("/api/v1/admin/backup/import-file","POST",null,fd);setMsg(t("restoreDone"));}
+    async function loadLocales(){const data=await api("/api/v1/i18n/locales");const sel=document.getElementById("translationLocale");sel.innerHTML="";data.locales.forEach(loc=>{const o=document.createElement("option");o.value=loc;o.textContent=loc;sel.appendChild(o);});const preferred=document.getElementById("locale").value||lang();if([...sel.options].some(o=>o.value===preferred))sel.value=preferred;await loadLocale();}
+    async function loadLocale(){const locale=document.getElementById("translationLocale").value;const data=await api(`/api/v1/i18n/${locale}`);document.getElementById("translationJson").value=JSON.stringify(data.messages,null,2);}
+    async function saveTranslations(){const locale=document.getElementById("translationLocale").value;let payload={};try{payload=JSON.parse(document.getElementById("translationJson").value);}catch(_){throw new Error(t("invalidJson"));}await api(`/api/v1/i18n/${locale}/custom`,"PUT",payload);setMsg(t("translationsSaved"));await loadLocale();}
+    async function publishTranslations(){const locale=document.getElementById("translationLocale").value;const d=await api(`/api/v1/i18n/${locale}/custom/publish`,"POST");setMsg(`${t("translationsPublished")}${d.path}`);}
+    async function logout(){await api("/api/v1/auth/logout","POST");window.location.href="/ui/get-started";}
+    async function safe(fn){try{await fn();}catch(e){setMsg(mapError(e.message),true);}}
+    const menu=document.getElementById("userMenu");document.getElementById("userBtn").addEventListener("click",()=>menu.classList.toggle("open"));document.addEventListener("click",(e)=>{if(!e.target.closest(".user-menu"))menu.classList.remove("open");});
+    document.getElementById("logoutBtn").addEventListener("click",()=>safe(logout));
+    document.getElementById("detectTzBtn").addEventListener("click",()=>{const tz=detectSystemTimezone();fillTimezoneSelect(tz);setMsg(`${t("tzDetected")}${tz}`);});
+    document.getElementById("theme").addEventListener("change",(e)=>{localStorage.setItem("mf_theme",e.target.value);applyTheme();setMsg(t("themeUpdated"));});
+    document.getElementById("locale").addEventListener("change",(e)=>{localStorage.setItem("mf_lang",e.target.value);applyTexts();});
+    document.getElementById("saveGeneralBtn").addEventListener("click",()=>safe(saveGeneral));
+    document.getElementById("saveBackupBtn").addEventListener("click",()=>safe(saveBackup));
+    document.getElementById("downloadBtn").addEventListener("click",()=>safe(downloadBackup));
+    document.getElementById("runNowBtn").addEventListener("click",()=>safe(runBackupNow));
+    document.getElementById("restoreBtn").addEventListener("click",()=>safe(restoreBackup));
+    document.getElementById("translationLocale").addEventListener("change",()=>safe(loadLocale));
+    document.getElementById("saveTranslationsBtn").addEventListener("click",()=>safe(saveTranslations));
+    document.getElementById("publishTranslationsBtn").addEventListener("click",()=>safe(publishTranslations));
+    applyTheme();applyTexts();safe(loadUser);safe(loadSettings);safe(loadLocales);
+  </script>
+</body>
+</html>

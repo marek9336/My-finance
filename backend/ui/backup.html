@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Finance - Backup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#eef3f9; --surface:#fff; --text:#10243d; --muted:#5a6f8f; --primary:#0f6ecf; --border:#d8e2f0; --shadow:0 8px 24px rgba(16,36,61,.08); --err:#b3261e; --ok:#1b8f47; }
+    body.dark { --bg:#0c1625; --surface:#13253a; --text:#e6f0ff; --muted:#a4bddf; --primary:#5ea8ff; --border:#274565; --shadow:0 8px 24px rgba(0,0,0,.35); --err:#ff8a80; --ok:#6ed69b; }
+    *{box-sizing:border-box} body{margin:0;padding:24px;font-family:"Roboto",sans-serif;background:var(--bg);color:var(--text)}
+    .container{max-width:1120px;margin:0 auto;display:grid;gap:16px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:20px}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .top-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .user-menu{position:relative}.menu-btn{width:auto;margin:0;background:transparent;border:1px solid var(--border);color:var(--text)}
+    .menu{position:absolute;right:0;top:42px;background:var(--surface);border:1px solid var(--border);border-radius:10px;min-width:180px;box-shadow:var(--shadow);display:none}.menu.open{display:block}
+    .menu button{margin:0;border-radius:0;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--text);text-align:left}.menu button:last-child{border-bottom:0;color:var(--err)}
+    .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+    .box{border:1px solid var(--border);border-radius:12px;padding:14px}
+    input,button{width:100%;border-radius:10px;font-size:14px;border:1px solid var(--border);padding:10px 12px;margin-bottom:8px}
+    input{background:#fff;color:var(--text)} body.dark input{background:#0f1f33;color:#f0f6ff;border-color:#385c83}
+    button{background:var(--primary);color:#fff;border:0;font-weight:500;cursor:pointer}
+    .warn{color:var(--err)}
+    .msg{font-size:14px}.msg.ok{color:var(--ok)}.msg.err{color:var(--err)}
+    a.nav{color:var(--primary);text-decoration:none;font-weight:500}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="topbar">
+        <div><h1 id="title">Backup & Restore</h1><p id="subtitle">Export and migrate data between machines.</p></div>
+        <div class="top-actions">
+          <a class="nav" href="/ui/dashboard" id="navDashboard">Dashboard</a>
+          <a class="nav" href="/ui/settings" id="navSettings">Settings</a>
+          <a class="nav" href="/ui/backup" id="navBackup">Backup</a>
+          <a class="nav" href="/ui/translations" id="navTranslations">Translations</a>
+          <div class="user-menu"><button class="menu-btn" id="userBtn" type="button">...</button><div class="menu" id="userMenu"><button id="logoutBtn" type="button">Logout</button></div></div>
+        </div>
+      </div>
+      <div id="msg" class="msg"></div>
+    </div>
+
+    <div class="card row">
+      <div class="box">
+        <h3 id="exportTitle">Export Backup</h3>
+        <button id="downloadBtn" type="button">Download Backup</button>
+        <button id="runNowBtn" type="button">Run Backup Now</button>
+      </div>
+      <div class="box">
+        <h3 id="restoreTitle">Restore Backup</h3>
+        <p class="warn" id="warn">Warning: restore replaces current data for this user.</p>
+        <input type="file" id="backupFile" accept=".json,application/json" />
+        <button id="restoreBtn" type="button">Restore From File</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const I18N={en:{title:"Backup & Restore",subtitle:"Export and migrate data between machines.",dashboard:"Dashboard",settings:"Settings",backup:"Backup",translations:"Translations",logout:"Logout",exportTitle:"Export Backup",restoreTitle:"Restore Backup",download:"Download Backup",runNow:"Run Backup Now",restoreBtn:"Restore From File",warn:"Warning: restore replaces current data for this user.",downloaded:"Backup downloaded.",runOk:"Backup created: ",restoreOk:"Restore complete.",authReq:"Authentication required."},cs:{title:"Záloha a obnova",subtitle:"Export a migrace dat mezi zařízeními.",dashboard:"Přehled",settings:"Nastavení",backup:"Záloha",translations:"Překlady",logout:"Odhlásit",exportTitle:"Export zálohy",restoreTitle:"Obnova zálohy",download:"Stáhnout zálohu",runNow:"Spustit zálohu nyní",restoreBtn:"Obnovit ze souboru",warn:"Pozor: obnova přepíše současná data uživatele.",downloaded:"Záloha stažena.",runOk:"Záloha vytvořena: ",restoreOk:"Obnova dokončena.",authReq:"Je vyžadováno přihlášení."}};
+    function t(k){const l=localStorage.getItem("mf_lang")||"en";return (I18N[l]&&I18N[l][k])||I18N.en[k]||k;}
+    function applyTheme(){const theme=localStorage.getItem("mf_theme")||"system";document.body.classList.remove("dark");if(theme==="dark"||(theme==="system"&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches)){document.body.classList.add("dark");}}
+    function applyTexts(){document.documentElement.lang=localStorage.getItem("mf_lang")||"en";document.getElementById("title").textContent=t("title");document.getElementById("subtitle").textContent=t("subtitle");document.getElementById("navDashboard").textContent=t("dashboard");document.getElementById("navSettings").textContent=t("settings");document.getElementById("navBackup").textContent=t("backup");document.getElementById("navTranslations").textContent=t("translations");document.getElementById("logoutBtn").textContent=t("logout");document.getElementById("exportTitle").textContent=t("exportTitle");document.getElementById("restoreTitle").textContent=t("restoreTitle");document.getElementById("downloadBtn").textContent=t("download");document.getElementById("runNowBtn").textContent=t("runNow");document.getElementById("restoreBtn").textContent=t("restoreBtn");document.getElementById("warn").textContent=t("warn");}
+    function setMsg(text,isError=false){const m=document.getElementById("msg");m.textContent=text;m.className=`msg ${isError?"err":"ok"}`;}
+    function mapError(msg){const m=(msg||"").toLowerCase();if(m.includes("authentication required"))return t("authReq");return msg;}
+    async function parseError(res){try{const d=await res.json();if(d?.error?.details?.length)return d.error.details.map(x=>`${x.field}: ${x.message}`).join("; ");if(d?.detail)return mapError(d.detail);}catch(_){ }return `HTTP ${res.status}`;}
+    async function api(path,method="GET",body=null,formData=null){const init={method,credentials:"include"};if(formData){init.body=formData;}else{init.headers={"Content-Type":"application/json"};init.body=body?JSON.stringify(body):null;}const res=await fetch(path,init);if(!res.ok)throw new Error(await parseError(res));return res.headers.get("content-type")?.includes("application/json")?await res.json():res;}
+    async function loadUser(){const me=await api("/api/v1/auth/me");document.getElementById("userBtn").textContent=me.fullName?`${me.fullName} (${me.email})`:me.email;}
+    async function downloadBackup(){const res=await fetch("/api/v1/admin/backup/download",{credentials:"include"});if(!res.ok)throw new Error(await parseError(res));const blob=await res.blob();const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="my-finance-backup.json";a.click();URL.revokeObjectURL(url);setMsg(t("downloaded"));}
+    async function runNow(){const d=await api("/api/v1/admin/backup/run-now","POST");setMsg(`${t("runOk")}${d.file}`);}
+    async function restore(){const f=document.getElementById("backupFile").files[0];if(!f)throw new Error("Select backup file.");const fd=new FormData();fd.append("file",f);await api("/api/v1/admin/backup/import-file","POST",null,fd);setMsg(t("restoreOk"));}
+    async function logout(){await api("/api/v1/auth/logout","POST");window.location.href="/ui/get-started";}
+    async function safe(fn){try{await fn();}catch(e){setMsg(mapError(e.message),true);}}
+    const menu=document.getElementById("userMenu");document.getElementById("userBtn").addEventListener("click",()=>menu.classList.toggle("open"));document.addEventListener("click",(e)=>{if(!e.target.closest(".user-menu"))menu.classList.remove("open");});
+    document.getElementById("logoutBtn").addEventListener("click",()=>safe(logout));document.getElementById("downloadBtn").addEventListener("click",()=>safe(downloadBackup));document.getElementById("runNowBtn").addEventListener("click",()=>safe(runNow));document.getElementById("restoreBtn").addEventListener("click",()=>safe(restore));
+    applyTheme();applyTexts();safe(loadUser);
+  </script>
+</body>
+</html>

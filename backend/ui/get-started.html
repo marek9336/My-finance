@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Finance - Get Started</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#eef3f9; --surface:#fff; --text:#10243d; --muted:#5a6f8f; --primary:#0f6ecf; --border:#d8e2f0; --shadow:0 8px 24px rgba(16,36,61,.08); --err:#b3261e; --ok:#1b8f47; }
+    body.dark { --bg:#0c1625; --surface:#13253a; --text:#e6f0ff; --muted:#a4bddf; --primary:#5ea8ff; --border:#274565; --shadow:0 8px 24px rgba(0,0,0,.35); --err:#ff8a80; --ok:#6ed69b; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; font-family: "Roboto", sans-serif; background: linear-gradient(140deg, var(--bg), #f7fbff); color: var(--text); }
+    .container { max-width: 1100px; margin: 0 auto; display: grid; gap: 16px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 20px; }
+    .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+    .box { border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+    input, select, button { width: 100%; border-radius: 10px; font-size: 14px; border: 1px solid var(--border); padding: 10px 12px; margin-bottom: 8px; }
+    input, select { background: #fff; color: var(--text); }
+    body.dark input, body.dark select { background:#0f1f33; color:#f0f6ff; border-color:#385c83; }
+    body.dark select option { background:#0f1f33; color:#f0f6ff; }
+    button { background: var(--primary); color: #fff; border: 0; font-weight: 500; cursor: pointer; }
+    button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .msg { font-size: 14px; }
+    .msg.ok { color: var(--ok); }
+    .msg.err { color: var(--err); }
+    .links a { color: var(--primary); text-decoration: none; margin-right: 10px; }
+    #loggedInPanel { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1 id="title">Get Started</h1>
+      <p id="subtitle">Choose app language, timezone, appearance and create your account.</p>
+      <div id="msg" class="msg"></div>
+      <div id="loggedInPanel" class="box">
+        <p id="alreadyLoggedInText">You are already signed in.</p>
+        <div class="row">
+          <button id="goDashboardBtn" type="button">Open Dashboard</button>
+          <button id="logoutFirstBtn" type="button" class="secondary">Logout First</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card row">
+      <div class="box">
+        <h3 id="setupTitle">Initial Setup</h3>
+        <label for="lang" id="langLabel">Language</label>
+        <select id="lang"><option value="en">English</option><option value="cs">Čeština</option></select>
+        <label for="tz" id="tzLabel">Timezone</label>
+        <select id="tz"></select>
+        <button id="detectTzBtn" class="secondary" type="button">Detect Timezone</button>
+        <label for="theme" id="themeLabel">Appearance</label>
+        <select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
+      </div>
+      <div class="box">
+        <h3 id="restoreTitle">Restore Database</h3>
+        <input id="restoreFile" type="file" accept=".json,application/json" />
+        <button id="restoreBtn" type="button">Restore Backup JSON</button>
+      </div>
+    </div>
+
+    <div id="authRow" class="card row">
+      <div class="box">
+        <h3 id="registerTitle">Register</h3>
+        <input id="regEmail" type="email" placeholder="email@example.com" />
+        <input id="regName" placeholder="Full name (optional)" />
+        <input id="regPassword" type="password" placeholder="Password (min 8)" />
+        <button id="regBtn" type="button">Register</button>
+      </div>
+      <div class="box">
+        <h3 id="loginTitle">Login</h3>
+        <input id="loginEmail" type="email" placeholder="email@example.com" />
+        <input id="loginPassword" type="password" placeholder="Password" />
+        <button id="loginBtn" type="button">Login</button>
+      </div>
+    </div>
+
+    <div class="card links">
+      <a href="/docs">API Docs</a>
+    </div>
+  </div>
+
+  <script>
+    const I18N = {
+      en: {
+        title: "Get Started",
+        subtitle: "Choose app language, timezone, appearance and create your account.",
+        setupTitle: "Initial Setup",
+        restoreTitle: "Restore Database",
+        registerTitle: "Register",
+        loginTitle: "Login",
+        langLabel: "Language",
+        tzLabel: "Timezone",
+        themeLabel: "Appearance",
+        detectTz: "Detect Timezone",
+        restoreBtn: "Restore Backup JSON",
+        regBtn: "Register",
+        loginBtn: "Login",
+        regEmailPh: "email@example.com",
+        regNamePh: "Full name (optional)",
+        regPassPh: "Password (min 8)",
+        loginEmailPh: "email@example.com",
+        loginPassPh: "Password",
+        errFill: "Fill email and password.",
+        errSelect: "Select backup file.",
+        errPwd: "Password must have at least 8 characters.",
+        errEmail: "Invalid email format.",
+        tzDetected: "Timezone detected: ",
+        restoreDone: "Restore completed. Accounts: ",
+        alreadyLoggedIn: "You are already signed in.",
+        goDashboard: "Open Dashboard",
+        logoutFirst: "Logout First",
+        authReq: "Authentication required."
+      },
+      cs: {
+        title: "Začínáme",
+        subtitle: "Nastav jazyk, časové pásmo, vzhled a vytvoř účet.",
+        setupTitle: "První nastavení",
+        restoreTitle: "Obnovit databázi",
+        registerTitle: "Registrace",
+        loginTitle: "Přihlášení",
+        langLabel: "Jazyk",
+        tzLabel: "Časové pásmo",
+        themeLabel: "Vzhled",
+        detectTz: "Zjistit časové pásmo",
+        restoreBtn: "Obnovit zálohu JSON",
+        regBtn: "Registrovat",
+        loginBtn: "Přihlásit",
+        regEmailPh: "email@example.com",
+        regNamePh: "Celé jméno (volitelné)",
+        regPassPh: "Heslo (min. 8 znaků)",
+        loginEmailPh: "email@example.com",
+        loginPassPh: "Heslo",
+        errFill: "Vyplň e-mail a heslo.",
+        errSelect: "Vyber soubor se zálohou.",
+        errPwd: "Heslo musí mít alespoň 8 znaků.",
+        errEmail: "Neplatný formát e-mailu.",
+        tzDetected: "Detekované časové pásmo: ",
+        restoreDone: "Obnova dokončena. Účty: ",
+        alreadyLoggedIn: "Už jsi přihlášen.",
+        goDashboard: "Otevřít přehled",
+        logoutFirst: "Nejdříve odhlásit",
+        authReq: "Je vyžadováno přihlášení."
+      }
+    };
+
+    const TZ_CHOICES = [
+      { value: "UTC", label_en: "(UTC+00:00) UTC / London", label_cs: "(UTC+00:00) UTC / Londýn" },
+      { value: "Europe/Prague", label_en: "(UTC+01:00) Prague / Paris / Budapest", label_cs: "(UTC+01:00) Praha / Paříž / Budapešť" },
+      { value: "Europe/Athens", label_en: "(UTC+02:00) Athens / Bucharest", label_cs: "(UTC+02:00) Athény / Bukurešť" },
+      { value: "America/New_York", label_en: "(UTC-05:00) New York", label_cs: "(UTC-05:00) New York" },
+      { value: "America/Chicago", label_en: "(UTC-06:00) Chicago", label_cs: "(UTC-06:00) Chicago" },
+      { value: "America/Los_Angeles", label_en: "(UTC-08:00) Los Angeles", label_cs: "(UTC-08:00) Los Angeles" },
+      { value: "Asia/Tokyo", label_en: "(UTC+09:00) Tokyo", label_cs: "(UTC+09:00) Tokio" }
+    ];
+
+    function currentLang() { return localStorage.getItem("mf_lang") || "en"; }
+    function t(key) {
+      const lang = currentLang();
+      return (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+    }
+    function applyTheme(theme) {
+      document.body.classList.remove("dark");
+      if (theme === "dark" || (theme === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+        document.body.classList.add("dark");
+      }
+    }
+    function setMsg(text, isError = false) {
+      const m = document.getElementById("msg");
+      m.textContent = text;
+      m.className = `msg ${isError ? "err" : "ok"}`;
+    }
+    function normalizeTimezone(tz) {
+      const cet = new Set(["Europe/Prague", "Europe/Budapest", "Europe/Paris", "Europe/Berlin", "Europe/Warsaw", "Europe/Bratislava", "Europe/Vienna"]);
+      if (cet.has(tz)) return "Europe/Prague";
+      return tz;
+    }
+    function detectTz() {
+      try {
+        return normalizeTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Prague");
+      } catch (_) {
+        return "Europe/Prague";
+      }
+    }
+    function fillTz(selected) {
+      const s = document.getElementById("tz");
+      const normalized = normalizeTimezone(selected || "Europe/Prague");
+      s.innerHTML = "";
+      TZ_CHOICES.forEach((zone) => {
+        const o = document.createElement("option");
+        o.value = zone.value;
+        o.textContent = currentLang() === "cs" ? zone.label_cs : zone.label_en;
+        s.appendChild(o);
+      });
+      if (![...s.options].some((opt) => opt.value === normalized)) {
+        const o = document.createElement("option");
+        o.value = normalized;
+        o.textContent = normalized;
+        s.appendChild(o);
+      }
+      s.value = normalized;
+    }
+    function applyLang(lang) {
+      document.documentElement.lang = lang;
+      localStorage.setItem("mf_lang", lang);
+      document.getElementById("title").textContent = t("title");
+      document.getElementById("subtitle").textContent = t("subtitle");
+      document.getElementById("setupTitle").textContent = t("setupTitle");
+      document.getElementById("restoreTitle").textContent = t("restoreTitle");
+      document.getElementById("registerTitle").textContent = t("registerTitle");
+      document.getElementById("loginTitle").textContent = t("loginTitle");
+      document.getElementById("langLabel").textContent = t("langLabel");
+      document.getElementById("tzLabel").textContent = t("tzLabel");
+      document.getElementById("themeLabel").textContent = t("themeLabel");
+      document.getElementById("detectTzBtn").textContent = t("detectTz");
+      document.getElementById("restoreBtn").textContent = t("restoreBtn");
+      document.getElementById("regBtn").textContent = t("regBtn");
+      document.getElementById("loginBtn").textContent = t("loginBtn");
+      document.getElementById("regEmail").placeholder = t("regEmailPh");
+      document.getElementById("regName").placeholder = t("regNamePh");
+      document.getElementById("regPassword").placeholder = t("regPassPh");
+      document.getElementById("loginEmail").placeholder = t("loginEmailPh");
+      document.getElementById("loginPassword").placeholder = t("loginPassPh");
+      document.getElementById("alreadyLoggedInText").textContent = t("alreadyLoggedIn");
+      document.getElementById("goDashboardBtn").textContent = t("goDashboard");
+      document.getElementById("logoutFirstBtn").textContent = t("logoutFirst");
+      fillTz(document.getElementById("tz").value || detectTz());
+    }
+    function mapError(msg) {
+      const m = (msg || "").toLowerCase();
+      if (m.includes("string should have at least 8 characters") || m.includes("at least 8")) return t("errPwd");
+      if (m.includes("invalid email")) return t("errEmail");
+      if (m.includes("authentication required")) return t("authReq");
+      return msg;
+    }
+    async function parseError(res) {
+      try {
+        const d = await res.json();
+        if (d && d.error && d.error.details && d.error.details.length) return mapError(d.error.details.map((x) => `${x.field}: ${x.message}`).join("; "));
+        if (d && d.detail) return mapError(d.detail);
+      } catch (_) {}
+      return `HTTP ${res.status}`;
+    }
+    async function api(path, method = "GET", body = null, formData = null) {
+      const init = { method, credentials: "include" };
+      if (formData) {
+        init.body = formData;
+      } else {
+        init.headers = { "Content-Type": "application/json" };
+        init.body = body ? JSON.stringify(body) : null;
+      }
+      const res = await fetch(path, init);
+      if (!res.ok) throw new Error(await parseError(res));
+      if (res.status === 204) return null;
+      if (res.headers.get("content-type") && res.headers.get("content-type").includes("application/json")) return await res.json();
+      return null;
+    }
+    async function saveSettingsIfLoggedIn() {
+      try {
+        await api("/api/v1/settings/app", "PUT", {
+          defaultLocale: document.getElementById("lang").value,
+          defaultTimezone: document.getElementById("tz").value
+        });
+      } catch (_) {}
+    }
+    async function checkLoggedInState() {
+      try {
+        const me = await api("/api/v1/auth/me");
+        if (!me || !me.email) return;
+        document.getElementById("loggedInPanel").style.display = "block";
+        document.getElementById("authRow").style.display = "none";
+      } catch (_) {
+        document.getElementById("loggedInPanel").style.display = "none";
+        document.getElementById("authRow").style.display = "grid";
+      }
+    }
+    async function register() {
+      const email = document.getElementById("regEmail").value.trim();
+      const password = document.getElementById("regPassword").value;
+      if (!email || !password) throw new Error(t("errFill"));
+      await api("/api/v1/auth/register", "POST", { email, fullName: document.getElementById("regName").value || null, password });
+      await saveSettingsIfLoggedIn();
+      window.location.href = "/ui/dashboard";
+    }
+    async function login() {
+      const email = document.getElementById("loginEmail").value.trim();
+      const password = document.getElementById("loginPassword").value;
+      if (!email || !password) throw new Error(t("errFill"));
+      await api("/api/v1/auth/login", "POST", { email, password });
+      await saveSettingsIfLoggedIn();
+      window.location.href = "/ui/dashboard";
+    }
+    async function restore() {
+      const f = document.getElementById("restoreFile").files[0];
+      if (!f) throw new Error(t("errSelect"));
+      const fd = new FormData();
+      fd.append("file", f);
+      const data = await api("/api/v1/bootstrap/restore", "POST", null, fd);
+      setMsg(`${t("restoreDone")}${data && data.counts ? (data.counts.accounts || 0) : 0}`);
+    }
+    async function logout() {
+      await api("/api/v1/auth/logout", "POST");
+      document.getElementById("loggedInPanel").style.display = "none";
+      document.getElementById("authRow").style.display = "grid";
+      setMsg("");
+    }
+    async function safe(fn) { try { await fn(); } catch (e) { setMsg(mapError(e.message), true); } }
+
+    const savedLang = localStorage.getItem("mf_lang") || "en";
+    const savedTheme = localStorage.getItem("mf_theme") || "system";
+    document.getElementById("lang").value = savedLang;
+    document.getElementById("theme").value = savedTheme;
+    fillTz(detectTz());
+    applyLang(savedLang);
+    applyTheme(savedTheme);
+    checkLoggedInState();
+
+    document.getElementById("lang").addEventListener("change", (e) => applyLang(e.target.value));
+    document.getElementById("theme").addEventListener("change", (e) => {
+      localStorage.setItem("mf_theme", e.target.value);
+      applyTheme(e.target.value);
+    });
+    document.getElementById("detectTzBtn").addEventListener("click", () => {
+      const tz = detectTz();
+      fillTz(tz);
+      setMsg(`${t("tzDetected")}${tz}`);
+    });
+    document.getElementById("restoreBtn").addEventListener("click", () => safe(restore));
+    document.getElementById("regBtn").addEventListener("click", () => safe(register));
+    document.getElementById("loginBtn").addEventListener("click", () => safe(login));
+    document.getElementById("goDashboardBtn").addEventListener("click", async () => {
+      await saveSettingsIfLoggedIn();
+      window.location.href = "/ui/dashboard";
+    });
+    document.getElementById("logoutFirstBtn").addEventListener("click", () => safe(logout));
+  </script>
+</body>
+</html>

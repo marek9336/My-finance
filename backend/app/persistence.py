@@ -1,0 +1,1346 @@
+from __future__ import annotations
+
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any
+from uuid import UUID, uuid4
+
+from fastapi import HTTPException
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import SQLAlchemyError
+
+from .config import settings
+from .auth_utils import hash_password, verify_password
+from .schemas import (
+    AccountCreate,
+    AccountUpdate,
+    AppSettings,
+    AppSettingsUpdate,
+    GoogleCalendarConnectRequest,
+    InsuranceCreate,
+    InsurancePremiumCreate,
+    NotificationRuleCreate,
+    PropertyCostCreate,
+    PropertyCreate,
+    TransactionCreate,
+    TransactionUpdate,
+    VehicleCreate,
+    VehicleServiceCreate,
+    VehicleServiceRuleCreate,
+)
+from .store import store
+
+
+def _to_float(value: Decimal | None) -> float | None:
+    return float(value) if value is not None else None
+
+
+class Persistence:
+    def get_app_settings(self) -> AppSettings:
+        raise NotImplementedError
+
+    def update_app_settings(self, payload: AppSettingsUpdate) -> AppSettings:
+        raise NotImplementedError
+
+    def export_backup(self) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def import_backup(self, payload: dict[str, Any]) -> dict[str, int]:
+        raise NotImplementedError
+
+    def mark_auto_backup_run(self, when: datetime) -> None:
+        raise NotImplementedError
+
+    def register_user(self, email: str, password: str, full_name: str | None) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def authenticate_user(self, email: str, password: str) -> dict[str, Any] | None:
+        raise NotImplementedError
+
+    def get_user_by_id(self, user_id: UUID) -> dict[str, Any] | None:
+        raise NotImplementedError
+
+    def create_account(self, user_id: UUID, payload: AccountCreate) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def list_accounts(self, user_id: UUID) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
+    def create_transaction(self, user_id: UUID, payload: TransactionCreate) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def list_transactions(self, user_id: UUID) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
+    def update_account(self, user_id: UUID, account_id: UUID, payload: AccountUpdate) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def update_transaction(self, user_id: UUID, transaction_id: UUID, payload: TransactionUpdate) -> dict[str, Any]:
+        raise NotImplementedError
+
+
+class InMemoryPersistence(Persistence):
+    def get_app_settings(self) -> AppSettings:
+        return AppSettings(**store.settings)
+
+    def update_app_settings(self, payload: AppSettingsUpdate) -> AppSettings:
+        store.settings.update(payload.model_dump(exclude_none=True))
+        return AppSettings(**store.settings)
+
+    def list_locales(self) -> list[str]:
+        return sorted(set(store.base_locales.keys()) | set(store.custom_locales.keys()))
+
+    def get_locale_bundle(self, locale: str) -> dict[str, str]:
+        return {**store.base_locales.get(locale, {}), **store.custom_locales.get(locale, {})}
+
+    def get_custom_locale(self, locale: str) -> dict[str, str]:
+        return store.custom_locales.get(locale, {})
+
+    def upsert_custom_locale(self, locale: str, payload: dict[str, str]) -> dict[str, str]:
+        if locale not in store.custom_locales:
+            store.custom_locales[locale] = {}
+        store.custom_locales[locale].update(payload)
+        return self.get_locale_bundle(locale)
+
+    def create_vehicle(self, payload: VehicleCreate) -> dict[str, Any]:
+        entity_id = uuid4()
+        now = datetime.utcnow()
+        row = {
+            "id": entity_id,
+            "type": payload.type.value,
+            "label": payload.label,
+            "current_odometer_km": payload.currentOdometerKm,
+            "created_at": now,
+        }
+        store.vehicles[entity_id] = row
+        return row
+
+    def create_vehicle_service(self, vehicle_id: UUID, payload: VehicleServiceCreate) -> dict[str, Any]:
+        if vehicle_id not in store.vehicles:
+            raise HTTPException(status_code=404, detail=f"vehicle not found: {vehicle_id}")
+        entity_id = uuid4()
+        row = {
+            "id": entity_id,
+            "vehicle_id": vehicle_id,
+            "service_type": payload.serviceType,
+            "service_at": payload.serviceAt,
+            "odometer_km": payload.odometerKm,
+        }
+        store.vehicle_services[entity_id] = row
+        return row
+
+    def create_vehicle_service_rule(self, vehicle_id: UUID, payload: VehicleServiceRuleCreate, next_due_date: date | None) -> dict[str, Any]:
+        if vehicle_id not in store.vehicles:
+            raise HTTPException(status_code=404, detail=f"vehicle not found: {vehicle_id}")
+        entity_id = uuid4()
+        row = {
+            "id": entity_id,
+            "vehicle_id": vehicle_id,
+            "service_type": payload.serviceType,
+            "next_due_date": next_due_date,
+            "is_active": True,
+        }
+        store.vehicle_service_rules[entity_id] = row
+        return row
+
+    def create_property(self, payload: PropertyCreate) -> dict[str, Any]:
+        entity_id = uuid4()
+        row = {
+            "id": entity_id,
+            "type": payload.type.value,
+            "name": payload.name,
+            "estimated_value": payload.estimatedValue,
+        }
+        store.properties[entity_id] = row
+        return row
+
+    def create_property_cost(self, property_id: UUID, payload: PropertyCostCreate) -> dict[str, Any]:
+        if property_id not in store.properties:
+            raise HTTPException(status_code=404, detail=f"property not found: {property_id}")
+        entity_id = uuid4()
+        row = {
+            "id": entity_id,
+            "property_id": property_id,
+            "cost_type": payload.costType,
+            "amount": payload.amount,
+            "currency": payload.currency,
+        }
+        store.property_costs[entity_id] = row
+        return row
+
+    def create_insurance(self, payload: InsuranceCreate) -> dict[str, Any]:
+        entity_id = uuid4()
+        row = {
+            "id": entity_id,
+            "insurance_type": payload.insuranceType.value,
+            "provider": payload.provider,
+            "valid_to": payload.validTo,
+            "is_active": True,
+        }
+        store.insurances[entity_id] = row
+        return row
+
+    def create_insurance_premium(self, insurance_id: UUID, payload: InsurancePremiumCreate) -> dict[str, Any]:
+        if insurance_id not in store.insurances:
+            raise HTTPException(status_code=404, detail=f"insurance not found: {insurance_id}")
+        entity_id = uuid4()
+        row = {"id": entity_id, "insurance_id": insurance_id, "amount": payload.amount, "currency": payload.currency}
+        store.insurance_premiums[entity_id] = row
+        return row
+
+    def create_calendar_integration(self, payload: GoogleCalendarConnectRequest) -> dict[str, Any]:
+        entity_id = uuid4()
+        row = {
+            "id": entity_id,
+            "provider": "google",
+            "external_calendar_id": payload.externalCalendarId,
+            "sync_enabled": True,
+        }
+        store.calendar_integrations[entity_id] = row
+        return row
+
+    def create_notification_rule(self, payload: NotificationRuleCreate) -> dict[str, Any]:
+        entity_id = uuid4()
+        row = {
+            "id": entity_id,
+            "channel": payload.channel.value,
+            "due_at": payload.dueAt,
+            "is_active": payload.isActive,
+            "source": payload.source.value,
+            "source_entity_id": payload.sourceEntityId,
+            "title_template": payload.titleTemplate,
+            "message_template": payload.messageTemplate,
+            "timezone": payload.timezone,
+        }
+        store.notification_rules[entity_id] = row
+        return row
+
+    def list_google_notification_rules(self) -> list[dict[str, Any]]:
+        return [r for r in store.notification_rules.values() if r.get("channel") == "google_calendar"]
+
+    def any_calendar_integration_id(self) -> UUID | None:
+        return next(iter(store.calendar_integrations.keys()), None)
+
+    def get_calendar_event(self, integration_id: UUID, event_uid: str) -> dict[str, Any] | None:
+        return store.calendar_events.get(f"{integration_id}:{event_uid}")
+
+    def create_calendar_event(self, integration_id: UUID, rule_id: UUID, event_uid: str, event_hash: str, provider_event_id: str) -> None:
+        store.calendar_events[f"{integration_id}:{event_uid}"] = {
+            "id": uuid4(),
+            "calendar_integration_id": integration_id,
+            "event_uid": event_uid,
+            "event_hash": event_hash,
+            "provider_event_id": provider_event_id,
+            "notification_rule_id": rule_id,
+        }
+
+    def update_calendar_event_hash(self, event_id: UUID, event_hash: str) -> None:
+        for key, row in store.calendar_events.items():
+            if row.get("id") == event_id:
+                row["event_hash"] = event_hash
+                store.calendar_events[key] = row
+                return
+
+    def debug_counts(self) -> dict[str, int]:
+        return {
+            "users": len(store.users),
+            "accounts": len(store.accounts),
+            "transactions": len(store.transactions),
+            "vehicles": len(store.vehicles),
+            "vehicleServices": len(store.vehicle_services),
+            "vehicleServiceRules": len(store.vehicle_service_rules),
+            "properties": len(store.properties),
+            "propertyCosts": len(store.property_costs),
+            "insurances": len(store.insurances),
+            "insurancePremiums": len(store.insurance_premiums),
+            "calendarIntegrations": len(store.calendar_integrations),
+            "notificationRules": len(store.notification_rules),
+            "notificationDeliveries": len(store.notification_deliveries),
+            "calendarEvents": len(store.calendar_events),
+        }
+
+    def export_backup(self) -> dict[str, Any]:
+        return {
+            "meta": {
+                "version": 1,
+                "exportedAt": datetime.utcnow().isoformat() + "Z",
+                "storageBackend": "memory",
+            },
+            "data": {
+                "appSettings": store.settings,
+                "customLocales": store.custom_locales,
+                "users": list(store.users.values()),
+                "userCredentials": [{"user_id": user_id, "password_hash": pwd_hash} for user_id, pwd_hash in store.user_credentials.items()],
+                "accounts": list(store.accounts.values()),
+                "transactions": list(store.transactions.values()),
+                "vehicles": list(store.vehicles.values()),
+                "vehicleServices": list(store.vehicle_services.values()),
+                "vehicleServiceRules": list(store.vehicle_service_rules.values()),
+                "properties": list(store.properties.values()),
+                "propertyCosts": list(store.property_costs.values()),
+                "insurances": list(store.insurances.values()),
+                "insurancePremiums": list(store.insurance_premiums.values()),
+                "calendarIntegrations": list(store.calendar_integrations.values()),
+                "notificationRules": list(store.notification_rules.values()),
+                "notificationDeliveries": list(store.notification_deliveries.values()),
+                "calendarEvents": list(store.calendar_events.values()),
+            },
+        }
+
+    def import_backup(self, payload: dict[str, Any]) -> dict[str, int]:
+        data = payload.get("data", {})
+        store.settings = data.get("appSettings", store.settings)
+        store.custom_locales = data.get("customLocales", {})
+
+        def map_by_id(rows: list[dict[str, Any]]) -> dict[UUID, dict[str, Any]]:
+            out: dict[UUID, dict[str, Any]] = {}
+            for row in rows:
+                row_id = row.get("id")
+                if not row_id:
+                    continue
+                if not isinstance(row_id, UUID):
+                    row["id"] = UUID(str(row_id))
+                out[row["id"]] = row
+            return out
+
+        store.users = map_by_id(data.get("users", []))
+        store.user_credentials = {}
+        for row in data.get("userCredentials", []):
+            uid = row.get("user_id")
+            if uid is None:
+                continue
+            store.user_credentials[UUID(str(uid))] = row.get("password_hash", "")
+        store.accounts = map_by_id(data.get("accounts", []))
+        store.transactions = map_by_id(data.get("transactions", []))
+        store.vehicles = map_by_id(data.get("vehicles", []))
+        store.vehicle_services = map_by_id(data.get("vehicleServices", []))
+        store.vehicle_service_rules = map_by_id(data.get("vehicleServiceRules", []))
+        store.properties = map_by_id(data.get("properties", []))
+        store.property_costs = map_by_id(data.get("propertyCosts", []))
+        store.insurances = map_by_id(data.get("insurances", []))
+        store.insurance_premiums = map_by_id(data.get("insurancePremiums", []))
+        store.calendar_integrations = map_by_id(data.get("calendarIntegrations", []))
+        store.notification_rules = map_by_id(data.get("notificationRules", []))
+        store.notification_deliveries = map_by_id(data.get("notificationDeliveries", []))
+
+        store.calendar_events = {}
+        for row in data.get("calendarEvents", []):
+            key = f"{row.get('calendar_integration_id')}:{row.get('event_uid')}"
+            store.calendar_events[key] = row
+
+        return self.debug_counts()
+
+    def mark_auto_backup_run(self, when: datetime) -> None:
+        store.settings["autoBackupLastRunAt"] = when
+
+    def register_user(self, email: str, password: str, full_name: str | None) -> dict[str, Any]:
+        for row in store.users.values():
+            if row["email"] == email:
+                raise HTTPException(status_code=409, detail="email already registered")
+        user_id = uuid4()
+        user_row = {"id": user_id, "email": email, "full_name": full_name, "created_at": datetime.utcnow()}
+        store.users[user_id] = user_row
+        store.user_credentials[user_id] = hash_password(password)
+        return user_row
+
+    def authenticate_user(self, email: str, password: str) -> dict[str, Any] | None:
+        for user_id, row in store.users.items():
+            if row["email"] == email:
+                stored_hash = store.user_credentials.get(user_id)
+                if stored_hash and verify_password(password, stored_hash):
+                    return row
+                return None
+        return None
+
+    def get_user_by_id(self, user_id: UUID) -> dict[str, Any] | None:
+        return store.users.get(user_id)
+
+    def create_account(self, user_id: UUID, payload: AccountCreate) -> dict[str, Any]:
+        entity_id = uuid4()
+        now = datetime.utcnow()
+        row = {
+            "id": entity_id,
+            "user_id": user_id,
+            "name": payload.name,
+            "account_type": payload.accountType,
+            "currency": payload.currency,
+            "initial_balance": payload.initialBalance,
+            "current_balance": payload.initialBalance,
+            "created_at": now,
+        }
+        store.accounts[entity_id] = row
+        return row
+
+    def list_accounts(self, user_id: UUID) -> list[dict[str, Any]]:
+        return [a for a in store.accounts.values() if a["user_id"] == user_id]
+
+    def create_transaction(self, user_id: UUID, payload: TransactionCreate) -> dict[str, Any]:
+        account = store.accounts.get(payload.accountId)
+        if not account or account["user_id"] != user_id:
+            raise HTTPException(status_code=404, detail=f"account not found: {payload.accountId}")
+        entity_id = uuid4()
+        sign = Decimal("1") if payload.direction == "income" else Decimal("-1")
+        account["current_balance"] = Decimal(account["current_balance"]) + (payload.amount * sign)
+        row = {
+            "id": entity_id,
+            "user_id": user_id,
+            "account_id": payload.accountId,
+            "direction": payload.direction,
+            "amount": payload.amount,
+            "currency": payload.currency,
+            "transaction_at": payload.occurredAt,
+            "category": payload.category,
+            "note": payload.note,
+        }
+        store.transactions[entity_id] = row
+        return row
+
+    def list_transactions(self, user_id: UUID) -> list[dict[str, Any]]:
+        return [t for t in store.transactions.values() if t["user_id"] == user_id]
+
+    def update_account(self, user_id: UUID, account_id: UUID, payload: AccountUpdate) -> dict[str, Any]:
+        row = store.accounts.get(account_id)
+        if not row or row["user_id"] != user_id:
+            raise HTTPException(status_code=404, detail=f"account not found: {account_id}")
+        updates = payload.model_dump(exclude_none=True)
+        if "name" in updates:
+            row["name"] = updates["name"]
+        if "accountType" in updates:
+            row["account_type"] = updates["accountType"]
+        if "currency" in updates:
+            row["currency"] = updates["currency"]
+        store.accounts[account_id] = row
+        return row
+
+    def update_transaction(self, user_id: UUID, transaction_id: UUID, payload: TransactionUpdate) -> dict[str, Any]:
+        row = store.transactions.get(transaction_id)
+        if not row or row["user_id"] != user_id:
+            raise HTTPException(status_code=404, detail=f"transaction not found: {transaction_id}")
+        updates = payload.model_dump(exclude_none=True)
+        if "direction" in updates:
+            row["direction"] = updates["direction"]
+        if "amount" in updates:
+            row["amount"] = updates["amount"]
+        if "currency" in updates:
+            row["currency"] = updates["currency"]
+        if "category" in updates:
+            row["category"] = updates["category"]
+        if "note" in updates:
+            row["note"] = updates["note"]
+        store.transactions[transaction_id] = row
+        return row
+
+
+class PostgresPersistence(Persistence):
+    def __init__(self, database_url: str, default_user_id: str) -> None:
+        self.engine: Engine = create_engine(database_url, future=True, pool_pre_ping=True)
+        self.default_user_id = default_user_id
+
+    def _run(self, sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        try:
+            with self.engine.begin() as conn:
+                result = conn.execute(text(sql), params or {})
+                if result.returns_rows:
+                    return [dict(row._mapping) for row in result.fetchall()]
+                return []
+        except SQLAlchemyError as exc:
+            raise HTTPException(status_code=500, detail=f"postgres error: {exc.__class__.__name__}") from exc
+
+    def _exists(self, table: str, entity_id: UUID) -> bool:
+        rows = self._run(f"select 1 as ok from {table} where id = :id limit 1", {"id": entity_id})
+        return bool(rows)
+
+    def _ensure_app_settings_columns(self) -> None:
+        self._run(
+            """
+            alter table if exists app_settings
+              add column if not exists default_locale text not null default 'en',
+              add column if not exists auto_backup_enabled boolean not null default false,
+              add column if not exists auto_backup_interval_minutes integer not null default 1440,
+              add column if not exists auto_backup_retention_days integer not null default 30,
+              add column if not exists auto_backup_last_run_at timestamptz
+            """
+        )
+
+    def _ensure_auth_columns(self) -> None:
+        self._run("alter table if exists users add column if not exists full_name text")
+        self._run(
+            """
+            create table if not exists user_credentials (
+              user_id uuid primary key references users(id) on delete cascade,
+              password_hash text not null,
+              created_at timestamptz not null default now(),
+              updated_at timestamptz not null default now()
+            )
+            """
+        )
+        self._run(
+            """
+            create table if not exists accounts (
+              id uuid primary key default gen_random_uuid(),
+              user_id uuid not null references users(id) on delete cascade,
+              name text not null,
+              account_type text not null default 'checking',
+              currency char(3) not null default 'CZK',
+              initial_balance numeric(14,2) not null default 0,
+              current_balance numeric(14,2) not null default 0,
+              created_at timestamptz not null default now(),
+              updated_at timestamptz not null default now()
+            )
+            """
+        )
+        self._run("create index if not exists idx_accounts_user on accounts(user_id, created_at desc)")
+        self._run(
+            """
+            alter table if exists transactions
+              add column if not exists direction text not null default 'expense',
+              add column if not exists category text,
+              add column if not exists note text
+            """
+        )
+
+    def get_app_settings(self) -> AppSettings:
+        self._ensure_app_settings_columns()
+        rows = self._run(
+            """
+            select default_locale, default_timezone, calendar_provider, calendar_sync_enabled, self_registration_enabled, smtp_enabled,
+                   auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at
+            from app_settings
+            where user_id = :user_id
+            """,
+            {"user_id": self.default_user_id},
+        )
+        if not rows:
+            self._run(
+                """
+                insert into app_settings (
+                  id, user_id, default_timezone, calendar_provider, calendar_sync_enabled, self_registration_enabled, smtp_enabled,
+                  default_locale, auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at
+                )
+                values (:id, :user_id, 'Europe/Prague', 'google', true, true, false, 'en', false, 1440, 30, null)
+                """,
+                {"id": str(uuid4()), "user_id": self.default_user_id},
+            )
+            rows = self._run(
+                """
+                select default_locale, default_timezone, calendar_provider, calendar_sync_enabled, self_registration_enabled, smtp_enabled,
+                       auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at
+                from app_settings where user_id = :user_id
+                """,
+                {"user_id": self.default_user_id},
+            )
+        row = rows[0]
+        return AppSettings(
+            defaultLocale=row.get("default_locale", "en"),
+            defaultTimezone=row["default_timezone"],
+            calendarProvider=row["calendar_provider"],
+            calendarSyncEnabled=row["calendar_sync_enabled"],
+            selfRegistrationEnabled=row["self_registration_enabled"],
+            smtpEnabled=row["smtp_enabled"],
+            autoBackupEnabled=row["auto_backup_enabled"],
+            autoBackupIntervalMinutes=row["auto_backup_interval_minutes"],
+            autoBackupRetentionDays=row["auto_backup_retention_days"],
+            autoBackupLastRunAt=row["auto_backup_last_run_at"],
+        )
+
+    def update_app_settings(self, payload: AppSettingsUpdate) -> AppSettings:
+        current = self.get_app_settings()
+        merged = current.model_dump()
+        merged.update(payload.model_dump(exclude_none=True))
+        self._run(
+            """
+            update app_settings
+            set default_locale = :default_locale,
+                default_timezone = :default_timezone,
+                calendar_provider = :calendar_provider,
+                calendar_sync_enabled = :calendar_sync_enabled,
+                self_registration_enabled = :self_registration_enabled,
+                smtp_enabled = :smtp_enabled,
+                auto_backup_enabled = :auto_backup_enabled,
+                auto_backup_interval_minutes = :auto_backup_interval_minutes,
+                auto_backup_retention_days = :auto_backup_retention_days,
+                auto_backup_last_run_at = :auto_backup_last_run_at,
+                updated_at = now()
+            where user_id = :user_id
+            """,
+            {
+                "default_locale": merged["defaultLocale"],
+                "default_timezone": merged["defaultTimezone"],
+                "calendar_provider": merged["calendarProvider"],
+                "calendar_sync_enabled": merged["calendarSyncEnabled"],
+                "self_registration_enabled": merged["selfRegistrationEnabled"],
+                "smtp_enabled": merged["smtpEnabled"],
+                "auto_backup_enabled": merged["autoBackupEnabled"],
+                "auto_backup_interval_minutes": merged["autoBackupIntervalMinutes"],
+                "auto_backup_retention_days": merged["autoBackupRetentionDays"],
+                "auto_backup_last_run_at": merged["autoBackupLastRunAt"],
+                "user_id": self.default_user_id,
+            },
+        )
+        return AppSettings(**merged)
+
+    def list_locales(self) -> list[str]:
+        rows = self._run("select locale from locale_custom_messages where user_id = :user_id group by locale", {"user_id": self.default_user_id})
+        custom = [r["locale"] for r in rows]
+        return sorted(set(store.base_locales.keys()) | set(custom))
+
+    def get_locale_bundle(self, locale: str) -> dict[str, str]:
+        rows = self._run(
+            "select message_key, message_value from locale_custom_messages where user_id = :user_id and locale = :locale",
+            {"user_id": self.default_user_id, "locale": locale},
+        )
+        custom = {r["message_key"]: r["message_value"] for r in rows}
+        return {**store.base_locales.get(locale, {}), **custom}
+
+    def get_custom_locale(self, locale: str) -> dict[str, str]:
+        rows = self._run(
+            "select message_key, message_value from locale_custom_messages where user_id = :user_id and locale = :locale",
+            {"user_id": self.default_user_id, "locale": locale},
+        )
+        return {r["message_key"]: r["message_value"] for r in rows}
+
+    def upsert_custom_locale(self, locale: str, payload: dict[str, str]) -> dict[str, str]:
+        for k, v in payload.items():
+            self._run(
+                """
+                insert into locale_custom_messages (id, user_id, locale, message_key, message_value, created_at, updated_at)
+                values (:id, :user_id, :locale, :message_key, :message_value, now(), now())
+                on conflict (user_id, locale, message_key)
+                do update set message_value = excluded.message_value, updated_at = now()
+                """,
+                {
+                    "id": str(uuid4()),
+                    "user_id": self.default_user_id,
+                    "locale": locale,
+                    "message_key": k,
+                    "message_value": v,
+                },
+            )
+        return self.get_locale_bundle(locale)
+
+    def create_vehicle(self, payload: VehicleCreate) -> dict[str, Any]:
+        row = self._run(
+            """
+            insert into vehicles (id, user_id, type, label, vin, plate_number, make, model, production_year, purchased_at, current_odometer_km, notes)
+            values (:id, :user_id, :type, :label, :vin, :plate_number, :make, :model, :production_year, :purchased_at, :current_odometer_km, :notes)
+            returning id, type, label, current_odometer_km, created_at
+            """,
+            {
+                "id": str(uuid4()),
+                "user_id": self.default_user_id,
+                "type": payload.type.value,
+                "label": payload.label,
+                "vin": payload.vin,
+                "plate_number": payload.plateNumber,
+                "make": payload.make,
+                "model": payload.model,
+                "production_year": payload.productionYear,
+                "purchased_at": payload.purchasedAt,
+                "current_odometer_km": payload.currentOdometerKm,
+                "notes": payload.notes,
+            },
+        )[0]
+        return row
+
+    def create_vehicle_service(self, vehicle_id: UUID, payload: VehicleServiceCreate) -> dict[str, Any]:
+        if not self._exists("vehicles", vehicle_id):
+            raise HTTPException(status_code=404, detail=f"vehicle not found: {vehicle_id}")
+        row = self._run(
+            """
+            insert into vehicle_services (id, vehicle_id, service_type, service_at, odometer_km, total_cost, currency, vendor, description)
+            values (:id, :vehicle_id, :service_type, :service_at, :odometer_km, :total_cost, :currency, :vendor, :description)
+            returning id, vehicle_id, service_type, service_at, odometer_km
+            """,
+            {
+                "id": str(uuid4()),
+                "vehicle_id": vehicle_id,
+                "service_type": payload.serviceType,
+                "service_at": payload.serviceAt,
+                "odometer_km": payload.odometerKm,
+                "total_cost": _to_float(payload.totalCost),
+                "currency": payload.currency,
+                "vendor": payload.vendor,
+                "description": payload.description,
+            },
+        )[0]
+        return row
+
+    def create_vehicle_service_rule(self, vehicle_id: UUID, payload: VehicleServiceRuleCreate, next_due_date: date | None) -> dict[str, Any]:
+        if not self._exists("vehicles", vehicle_id):
+            raise HTTPException(status_code=404, detail=f"vehicle not found: {vehicle_id}")
+        row = self._run(
+            """
+            insert into vehicle_service_rules (id, vehicle_id, service_type, interval_value, interval_unit, lead_days, next_due_date, is_active)
+            values (:id, :vehicle_id, :service_type, :interval_value, :interval_unit, :lead_days, :next_due_date, true)
+            returning id, vehicle_id, service_type, next_due_date, is_active
+            """,
+            {
+                "id": str(uuid4()),
+                "vehicle_id": vehicle_id,
+                "service_type": payload.serviceType,
+                "interval_value": payload.intervalValue,
+                "interval_unit": payload.intervalUnit.value,
+                "lead_days": payload.leadDays,
+                "next_due_date": next_due_date,
+            },
+        )[0]
+        return row
+
+    def create_property(self, payload: PropertyCreate) -> dict[str, Any]:
+        row = self._run(
+            """
+            insert into properties (id, user_id, type, name, address_line1, city, postal_code, country_code, acquired_at, purchase_price, purchase_currency, estimated_value, estimated_value_currency, estimated_value_updated_at)
+            values (:id, :user_id, :type, :name, :address_line1, :city, :postal_code, :country_code, :acquired_at, :purchase_price, :purchase_currency, :estimated_value, :estimated_value_currency, :estimated_value_updated_at)
+            returning id, type, name, estimated_value
+            """,
+            {
+                "id": str(uuid4()),
+                "user_id": self.default_user_id,
+                "type": payload.type.value,
+                "name": payload.name,
+                "address_line1": payload.addressLine1,
+                "city": payload.city,
+                "postal_code": payload.postalCode,
+                "country_code": payload.countryCode,
+                "acquired_at": payload.acquiredAt,
+                "purchase_price": _to_float(payload.purchasePrice),
+                "purchase_currency": payload.purchaseCurrency,
+                "estimated_value": _to_float(payload.estimatedValue),
+                "estimated_value_currency": payload.estimatedValueCurrency,
+                "estimated_value_updated_at": payload.estimatedValueUpdatedAt,
+            },
+        )[0]
+        return row
+
+    def create_property_cost(self, property_id: UUID, payload: PropertyCostCreate) -> dict[str, Any]:
+        if not self._exists("properties", property_id):
+            raise HTTPException(status_code=404, detail=f"property not found: {property_id}")
+        row = self._run(
+            """
+            insert into property_costs (id, property_id, cost_type, period_start, period_end, amount, currency, provider, meter_value, meter_unit, is_recurring)
+            values (:id, :property_id, :cost_type, :period_start, :period_end, :amount, :currency, :provider, :meter_value, :meter_unit, :is_recurring)
+            returning id, property_id, cost_type, amount, currency
+            """,
+            {
+                "id": str(uuid4()),
+                "property_id": property_id,
+                "cost_type": payload.costType,
+                "period_start": payload.periodStart,
+                "period_end": payload.periodEnd,
+                "amount": _to_float(payload.amount),
+                "currency": payload.currency,
+                "provider": payload.provider,
+                "meter_value": _to_float(payload.meterValue),
+                "meter_unit": payload.meterUnit,
+                "is_recurring": payload.isRecurring,
+            },
+        )[0]
+        return row
+
+    def create_insurance(self, payload: InsuranceCreate) -> dict[str, Any]:
+        row = self._run(
+            """
+            insert into insurances (id, user_id, insurance_type, provider, policy_number, subject_vehicle_id, subject_property_id, coverage_amount, coverage_currency, deductible_amount, deductible_currency, valid_from, valid_to, payment_frequency, is_active)
+            values (:id, :user_id, :insurance_type, :provider, :policy_number, :subject_vehicle_id, :subject_property_id, :coverage_amount, :coverage_currency, :deductible_amount, :deductible_currency, :valid_from, :valid_to, :payment_frequency, true)
+            returning id, insurance_type, provider, valid_to, is_active
+            """,
+            {
+                "id": str(uuid4()),
+                "user_id": self.default_user_id,
+                "insurance_type": payload.insuranceType.value,
+                "provider": payload.provider,
+                "policy_number": payload.policyNumber,
+                "subject_vehicle_id": payload.subjectVehicleId,
+                "subject_property_id": payload.subjectPropertyId,
+                "coverage_amount": _to_float(payload.coverageAmount),
+                "coverage_currency": payload.coverageCurrency,
+                "deductible_amount": _to_float(payload.deductibleAmount),
+                "deductible_currency": payload.deductibleCurrency,
+                "valid_from": payload.validFrom,
+                "valid_to": payload.validTo,
+                "payment_frequency": payload.paymentFrequency,
+            },
+        )[0]
+        return row
+
+    def create_insurance_premium(self, insurance_id: UUID, payload: InsurancePremiumCreate) -> dict[str, Any]:
+        if not self._exists("insurances", insurance_id):
+            raise HTTPException(status_code=404, detail=f"insurance not found: {insurance_id}")
+        row = self._run(
+            """
+            insert into insurance_premiums (id, insurance_id, period_start, period_end, amount, currency, paid_at, payment_transaction_id)
+            values (:id, :insurance_id, :period_start, :period_end, :amount, :currency, :paid_at, :payment_transaction_id)
+            returning id, insurance_id, amount, currency
+            """,
+            {
+                "id": str(uuid4()),
+                "insurance_id": insurance_id,
+                "period_start": payload.periodStart,
+                "period_end": payload.periodEnd,
+                "amount": _to_float(payload.amount),
+                "currency": payload.currency,
+                "paid_at": payload.paidAt,
+                "payment_transaction_id": payload.paymentTransactionId,
+            },
+        )[0]
+        return row
+
+    def create_calendar_integration(self, payload: GoogleCalendarConnectRequest) -> dict[str, Any]:
+        row = self._run(
+            """
+            insert into calendar_integrations (id, user_id, provider, external_calendar_id, access_token_encrypted, refresh_token_encrypted, sync_enabled)
+            values (:id, :user_id, 'google', :external_calendar_id, :access_token, :refresh_token, true)
+            returning id, provider, external_calendar_id, sync_enabled
+            """,
+            {
+                "id": str(uuid4()),
+                "user_id": self.default_user_id,
+                "external_calendar_id": payload.externalCalendarId,
+                "access_token": "pending-oauth-exchange",
+                "refresh_token": "pending-oauth-exchange",
+            },
+        )[0]
+        return row
+
+    def create_notification_rule(self, payload: NotificationRuleCreate) -> dict[str, Any]:
+        row = self._run(
+            """
+            insert into notification_rules (id, user_id, source, source_entity_id, title_template, message_template, due_at, lead_days, channel, timezone, is_active)
+            values (:id, :user_id, :source, :source_entity_id, :title_template, :message_template, :due_at, :lead_days, :channel, :timezone, :is_active)
+            returning id, channel, due_at, is_active
+            """,
+            {
+                "id": str(uuid4()),
+                "user_id": self.default_user_id,
+                "source": payload.source.value,
+                "source_entity_id": payload.sourceEntityId,
+                "title_template": payload.titleTemplate,
+                "message_template": payload.messageTemplate,
+                "due_at": payload.dueAt,
+                "lead_days": payload.leadDays,
+                "channel": payload.channel.value,
+                "timezone": payload.timezone,
+                "is_active": payload.isActive,
+            },
+        )[0]
+        return row
+
+    def list_google_notification_rules(self) -> list[dict[str, Any]]:
+        return self._run(
+            """
+            select id, source, source_entity_id, title_template, message_template, due_at, timezone
+            from notification_rules
+            where channel = 'google_calendar' and is_active = true and user_id = :user_id
+            """,
+            {"user_id": self.default_user_id},
+        )
+
+    def any_calendar_integration_id(self) -> UUID | None:
+        rows = self._run(
+            """
+            select id from calendar_integrations
+            where user_id = :user_id and provider = 'google' and sync_enabled = true
+            order by created_at asc
+            limit 1
+            """,
+            {"user_id": self.default_user_id},
+        )
+        return rows[0]["id"] if rows else None
+
+    def get_calendar_event(self, integration_id: UUID, event_uid: str) -> dict[str, Any] | None:
+        rows = self._run(
+            """
+            select id, event_hash, provider_event_id from calendar_events
+            where calendar_integration_id = :integration_id and event_uid = :event_uid
+            limit 1
+            """,
+            {"integration_id": integration_id, "event_uid": event_uid},
+        )
+        return rows[0] if rows else None
+
+    def create_calendar_event(self, integration_id: UUID, rule_id: UUID, event_uid: str, event_hash: str, provider_event_id: str) -> None:
+        self._run(
+            """
+            insert into calendar_events (id, notification_rule_id, calendar_integration_id, provider_event_id, event_uid, event_hash)
+            values (:id, :notification_rule_id, :calendar_integration_id, :provider_event_id, :event_uid, :event_hash)
+            """,
+            {
+                "id": str(uuid4()),
+                "notification_rule_id": rule_id,
+                "calendar_integration_id": integration_id,
+                "provider_event_id": provider_event_id,
+                "event_uid": event_uid,
+                "event_hash": event_hash,
+            },
+        )
+
+    def update_calendar_event_hash(self, event_id: UUID, event_hash: str) -> None:
+        self._run(
+            "update calendar_events set event_hash = :event_hash, updated_at = now(), last_synced_at = now() where id = :id",
+            {"id": event_id, "event_hash": event_hash},
+        )
+
+    def debug_counts(self) -> dict[str, int]:
+        queries = {
+            "users": "select count(*) as c from users",
+            "accounts": "select count(*) as c from accounts where user_id = :user_id",
+            "transactions": "select count(*) as c from transactions where user_id = :user_id",
+            "vehicles": "select count(*) as c from vehicles where user_id = :user_id",
+            "vehicleServices": "select count(*) as c from vehicle_services vs join vehicles v on v.id = vs.vehicle_id where v.user_id = :user_id",
+            "vehicleServiceRules": "select count(*) as c from vehicle_service_rules vr join vehicles v on v.id = vr.vehicle_id where v.user_id = :user_id",
+            "properties": "select count(*) as c from properties where user_id = :user_id",
+            "propertyCosts": "select count(*) as c from property_costs pc join properties p on p.id = pc.property_id where p.user_id = :user_id",
+            "insurances": "select count(*) as c from insurances where user_id = :user_id",
+            "insurancePremiums": "select count(*) as c from insurance_premiums ip join insurances i on i.id = ip.insurance_id where i.user_id = :user_id",
+            "calendarIntegrations": "select count(*) as c from calendar_integrations where user_id = :user_id",
+            "notificationRules": "select count(*) as c from notification_rules where user_id = :user_id",
+            "notificationDeliveries": "select count(*) as c from notification_deliveries nd join notification_rules nr on nr.id = nd.notification_rule_id where nr.user_id = :user_id",
+            "calendarEvents": "select count(*) as c from calendar_events ce join calendar_integrations ci on ci.id = ce.calendar_integration_id where ci.user_id = :user_id",
+        }
+        out: dict[str, int] = {}
+        for key, query in queries.items():
+            rows = self._run(query, {"user_id": self.default_user_id})
+            out[key] = int(rows[0]["c"])
+        return out
+
+    def export_backup(self) -> dict[str, Any]:
+        return {
+            "meta": {
+                "version": 1,
+                "exportedAt": datetime.utcnow().isoformat() + "Z",
+                "storageBackend": "postgres",
+            },
+            "data": {
+                "appSettings": self.get_app_settings().model_dump(),
+                "customLocales": self._run(
+                    "select locale, message_key, message_value from locale_custom_messages where user_id = :user_id order by locale, message_key",
+                    {"user_id": self.default_user_id},
+                ),
+                "users": self._run("select id, email, full_name, created_at, updated_at from users where id = :user_id", {"user_id": self.default_user_id}),
+                "userCredentials": self._run("select user_id, password_hash, created_at, updated_at from user_credentials where user_id = :user_id", {"user_id": self.default_user_id}),
+                "accounts": self._run("select * from accounts where user_id = :user_id order by created_at", {"user_id": self.default_user_id}),
+                "transactions": self._run("select * from transactions where user_id = :user_id order by created_at", {"user_id": self.default_user_id}),
+                "vehicles": self._run("select * from vehicles where user_id = :user_id order by created_at", {"user_id": self.default_user_id}),
+                "vehicleServices": self._run(
+                    """
+                    select vs.* from vehicle_services vs
+                    join vehicles v on v.id = vs.vehicle_id
+                    where v.user_id = :user_id
+                    order by vs.created_at
+                    """,
+                    {"user_id": self.default_user_id},
+                ),
+                "vehicleServiceRules": self._run(
+                    """
+                    select vr.* from vehicle_service_rules vr
+                    join vehicles v on v.id = vr.vehicle_id
+                    where v.user_id = :user_id
+                    order by vr.created_at
+                    """,
+                    {"user_id": self.default_user_id},
+                ),
+                "properties": self._run("select * from properties where user_id = :user_id order by created_at", {"user_id": self.default_user_id}),
+                "propertyCosts": self._run(
+                    """
+                    select pc.* from property_costs pc
+                    join properties p on p.id = pc.property_id
+                    where p.user_id = :user_id
+                    order by pc.created_at
+                    """,
+                    {"user_id": self.default_user_id},
+                ),
+                "insurances": self._run("select * from insurances where user_id = :user_id order by created_at", {"user_id": self.default_user_id}),
+                "insurancePremiums": self._run(
+                    """
+                    select ip.* from insurance_premiums ip
+                    join insurances i on i.id = ip.insurance_id
+                    where i.user_id = :user_id
+                    order by ip.created_at
+                    """,
+                    {"user_id": self.default_user_id},
+                ),
+                "calendarIntegrations": self._run(
+                    "select * from calendar_integrations where user_id = :user_id order by created_at",
+                    {"user_id": self.default_user_id},
+                ),
+                "notificationRules": self._run(
+                    "select * from notification_rules where user_id = :user_id order by created_at",
+                    {"user_id": self.default_user_id},
+                ),
+                "notificationDeliveries": self._run(
+                    """
+                    select nd.* from notification_deliveries nd
+                    join notification_rules nr on nr.id = nd.notification_rule_id
+                    where nr.user_id = :user_id
+                    order by nd.created_at
+                    """,
+                    {"user_id": self.default_user_id},
+                ),
+                "calendarEvents": self._run(
+                    """
+                    select ce.* from calendar_events ce
+                    join calendar_integrations ci on ci.id = ce.calendar_integration_id
+                    where ci.user_id = :user_id
+                    order by ce.created_at
+                    """,
+                    {"user_id": self.default_user_id},
+                ),
+            },
+        }
+
+    def import_backup(self, payload: dict[str, Any]) -> dict[str, int]:
+        data = payload.get("data", {})
+        with self.engine.begin() as conn:
+            conn.execute(
+                text("insert into users (id, email) values (:id, :email) on conflict (id) do nothing"),
+                {"id": self.default_user_id, "email": "default@local"},
+            )
+            cleanup_sql = [
+                "delete from transactions where user_id = :user_id",
+                "delete from accounts where user_id = :user_id",
+                "delete from calendar_events ce using calendar_integrations ci where ce.calendar_integration_id = ci.id and ci.user_id = :user_id",
+                "delete from notification_deliveries nd using notification_rules nr where nd.notification_rule_id = nr.id and nr.user_id = :user_id",
+                "delete from notification_rules where user_id = :user_id",
+                "delete from calendar_integrations where user_id = :user_id",
+                "delete from insurance_premiums ip using insurances i where ip.insurance_id = i.id and i.user_id = :user_id",
+                "delete from insurances where user_id = :user_id",
+                "delete from property_costs pc using properties p where pc.property_id = p.id and p.user_id = :user_id",
+                "delete from properties where user_id = :user_id",
+                "delete from vehicle_service_rules vr using vehicles v where vr.vehicle_id = v.id and v.user_id = :user_id",
+                "delete from vehicle_services vs using vehicles v where vs.vehicle_id = v.id and v.user_id = :user_id",
+                "delete from vehicles where user_id = :user_id",
+                "delete from locale_custom_messages where user_id = :user_id",
+                "delete from app_settings where user_id = :user_id",
+                "delete from user_credentials where user_id = :user_id",
+            ]
+            for q in cleanup_sql:
+                conn.execute(text(q), {"user_id": self.default_user_id})
+
+            users_rows = data.get("users", [])
+            if users_rows:
+                for u in users_rows:
+                    conn.execute(
+                        text(
+                            """
+                            insert into users (id, email, full_name)
+                            values (:id, :email, :full_name)
+                            on conflict (id) do update set email = excluded.email, full_name = excluded.full_name, updated_at = now()
+                            """
+                        ),
+                        {
+                            "id": u.get("id", self.default_user_id),
+                            "email": u.get("email", "default@local"),
+                            "full_name": u.get("full_name"),
+                        },
+                    )
+
+            for c in data.get("userCredentials", []):
+                conn.execute(
+                    text(
+                        "insert into user_credentials (user_id, password_hash) values (:user_id, :password_hash) on conflict (user_id) do update set password_hash = excluded.password_hash, updated_at = now()"
+                    ),
+                    {"user_id": c.get("user_id", self.default_user_id), "password_hash": c.get("password_hash", hash_password("ChangeMe123!"))},
+                )
+
+            app_settings = data.get("appSettings", {})
+            if app_settings:
+                conn.execute(
+                    text(
+                        """
+                        insert into app_settings (
+                          id, user_id, default_timezone, calendar_provider, calendar_sync_enabled, self_registration_enabled, smtp_enabled,
+                          default_locale, auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at
+                        )
+                        values (
+                          :id, :user_id, :default_timezone, :calendar_provider, :calendar_sync_enabled, :self_registration_enabled, :smtp_enabled,
+                          :default_locale, :auto_backup_enabled, :auto_backup_interval_minutes, :auto_backup_retention_days, :auto_backup_last_run_at
+                        )
+                        """
+                    ),
+                    {
+                        "id": str(uuid4()),
+                        "user_id": self.default_user_id,
+                        "default_timezone": app_settings.get("defaultTimezone", "Europe/Prague"),
+                        "calendar_provider": app_settings.get("calendarProvider", "google"),
+                        "calendar_sync_enabled": app_settings.get("calendarSyncEnabled", True),
+                        "self_registration_enabled": app_settings.get("selfRegistrationEnabled", True),
+                        "smtp_enabled": app_settings.get("smtpEnabled", False),
+                        "default_locale": app_settings.get("defaultLocale", "en"),
+                        "auto_backup_enabled": app_settings.get("autoBackupEnabled", False),
+                        "auto_backup_interval_minutes": app_settings.get("autoBackupIntervalMinutes", 1440),
+                        "auto_backup_retention_days": app_settings.get("autoBackupRetentionDays", 30),
+                        "auto_backup_last_run_at": app_settings.get("autoBackupLastRunAt"),
+                    },
+                )
+
+            custom_locales = data.get("customLocales", [])
+            if isinstance(custom_locales, dict):
+                custom_rows: list[dict[str, Any]] = []
+                for locale, messages in custom_locales.items():
+                    for key, value in (messages or {}).items():
+                        custom_rows.append({"locale": locale, "message_key": key, "message_value": value})
+            else:
+                custom_rows = custom_locales
+
+            for row in custom_rows:
+                if isinstance(row, dict) and "locale" in row and "message_key" in row:
+                    conn.execute(
+                        text(
+                            """
+                            insert into locale_custom_messages (id, user_id, locale, message_key, message_value)
+                            values (:id, :user_id, :locale, :message_key, :message_value)
+                            """
+                        ),
+                        {
+                            "id": str(uuid4()),
+                            "user_id": self.default_user_id,
+                            "locale": row["locale"],
+                            "message_key": row["message_key"],
+                            "message_value": row["message_value"],
+                        },
+                    )
+
+            def insert_rows(table: str, rows: list[dict[str, Any]], cols: list[str], force_user: bool = False) -> None:
+                if not rows:
+                    return
+                col_csv = ", ".join(cols)
+                val_csv = ", ".join(f":{c}" for c in cols)
+                stmt = text(f"insert into {table} ({col_csv}) values ({val_csv})")
+                for r in rows:
+                    params = {c: r.get(c) for c in cols}
+                    if force_user:
+                        params["user_id"] = self.default_user_id
+                    conn.execute(stmt, params)
+
+            insert_rows("vehicles", data.get("vehicles", []), ["id", "user_id", "type", "label", "vin", "plate_number", "make", "model", "production_year", "purchased_at", "current_odometer_km", "notes"], True)
+            insert_rows("accounts", data.get("accounts", []), ["id", "user_id", "name", "account_type", "currency", "initial_balance", "current_balance"], True)
+            insert_rows("transactions", data.get("transactions", []), ["id", "user_id", "account_id", "amount", "currency", "transaction_at", "direction", "category", "note"], True)
+            insert_rows("vehicle_services", data.get("vehicleServices", []), ["id", "vehicle_id", "service_type", "service_at", "odometer_km", "total_cost", "currency", "vendor", "description", "receipt_url"])
+            insert_rows("vehicle_service_rules", data.get("vehicleServiceRules", []), ["id", "vehicle_id", "service_type", "interval_value", "interval_unit", "lead_days", "last_service_id", "next_due_date", "next_due_odometer_km", "is_active"])
+            insert_rows("properties", data.get("properties", []), ["id", "user_id", "type", "name", "address_line1", "city", "postal_code", "country_code", "acquired_at", "purchase_price", "purchase_currency", "estimated_value", "estimated_value_currency", "estimated_value_updated_at", "floor_area_m2", "land_area_m2", "notes"], True)
+            insert_rows("property_costs", data.get("propertyCosts", []), ["id", "property_id", "cost_type", "period_start", "period_end", "amount", "currency", "provider", "meter_value", "meter_unit", "is_recurring", "recurring_template_id"])
+            insert_rows("insurances", data.get("insurances", []), ["id", "user_id", "insurance_type", "provider", "policy_number", "subject_vehicle_id", "subject_property_id", "coverage_amount", "coverage_currency", "deductible_amount", "deductible_currency", "valid_from", "valid_to", "payment_frequency", "is_active"], True)
+            insert_rows("insurance_premiums", data.get("insurancePremiums", []), ["id", "insurance_id", "period_start", "period_end", "amount", "currency", "paid_at", "payment_transaction_id"])
+            for row in data.get("calendarIntegrations", []):
+                conn.execute(
+                    text(
+                        """
+                        insert into calendar_integrations (id, user_id, provider, external_calendar_id, access_token_encrypted, refresh_token_encrypted, token_expires_at, sync_enabled)
+                        values (:id, :user_id, :provider, :external_calendar_id, :access_token_encrypted, :refresh_token_encrypted, :token_expires_at, :sync_enabled)
+                        """
+                    ),
+                    {
+                        "id": row.get("id", str(uuid4())),
+                        "user_id": self.default_user_id,
+                        "provider": row.get("provider", "google"),
+                        "external_calendar_id": row.get("external_calendar_id", row.get("externalCalendarId", "primary")),
+                        "access_token_encrypted": row.get("access_token_encrypted", "imported-token"),
+                        "refresh_token_encrypted": row.get("refresh_token_encrypted", "imported-token"),
+                        "token_expires_at": row.get("token_expires_at"),
+                        "sync_enabled": row.get("sync_enabled", row.get("syncEnabled", True)),
+                    },
+                )
+            insert_rows("notification_rules", data.get("notificationRules", []), ["id", "user_id", "source", "source_entity_id", "title_template", "message_template", "due_at", "lead_days", "channel", "timezone", "is_active"], True)
+            insert_rows("notification_deliveries", data.get("notificationDeliveries", []), ["id", "notification_rule_id", "scheduled_for", "delivered_at", "status", "attempts", "error_message", "provider_message_id"])
+            insert_rows("calendar_events", data.get("calendarEvents", []), ["id", "notification_rule_id", "calendar_integration_id", "provider_event_id", "event_uid", "event_hash", "last_synced_at"])
+
+        return self.debug_counts()
+
+    def mark_auto_backup_run(self, when: datetime) -> None:
+        self._run(
+            "update app_settings set auto_backup_last_run_at = :when, updated_at = now() where user_id = :user_id",
+            {"when": when, "user_id": self.default_user_id},
+        )
+
+    def register_user(self, email: str, password: str, full_name: str | None) -> dict[str, Any]:
+        self._ensure_auth_columns()
+        exists = self._run("select id from users where lower(email) = lower(:email) limit 1", {"email": email})
+        if exists:
+            raise HTTPException(status_code=409, detail="email already registered")
+        user_id = uuid4()
+        self._run(
+            "insert into users (id, email, full_name) values (:id, :email, :full_name)",
+            {"id": user_id, "email": email, "full_name": full_name},
+        )
+        self._run(
+            "insert into user_credentials (user_id, password_hash) values (:user_id, :password_hash)",
+            {"user_id": user_id, "password_hash": hash_password(password)},
+        )
+        return {"id": user_id, "email": email, "full_name": full_name}
+
+    def authenticate_user(self, email: str, password: str) -> dict[str, Any] | None:
+        self._ensure_auth_columns()
+        rows = self._run(
+            """
+            select u.id, u.email, u.full_name, c.password_hash
+            from users u
+            join user_credentials c on c.user_id = u.id
+            where lower(u.email) = lower(:email)
+            limit 1
+            """,
+            {"email": email},
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        if not verify_password(password, row["password_hash"]):
+            return None
+        return {"id": row["id"], "email": row["email"], "full_name": row["full_name"]}
+
+    def get_user_by_id(self, user_id: UUID) -> dict[str, Any] | None:
+        rows = self._run("select id, email, full_name from users where id = :id limit 1", {"id": user_id})
+        return rows[0] if rows else None
+
+    def create_account(self, user_id: UUID, payload: AccountCreate) -> dict[str, Any]:
+        self._ensure_auth_columns()
+        row = self._run(
+            """
+            insert into accounts (id, user_id, name, account_type, currency, initial_balance, current_balance)
+            values (:id, :user_id, :name, :account_type, :currency, :initial_balance, :current_balance)
+            returning id, name, account_type, currency, current_balance, created_at
+            """,
+            {
+                "id": str(uuid4()),
+                "user_id": user_id,
+                "name": payload.name,
+                "account_type": payload.accountType,
+                "currency": payload.currency,
+                "initial_balance": _to_float(payload.initialBalance),
+                "current_balance": _to_float(payload.initialBalance),
+            },
+        )[0]
+        return row
+
+    def list_accounts(self, user_id: UUID) -> list[dict[str, Any]]:
+        return self._run(
+            """
+            select id, name, account_type, currency, current_balance, created_at
+            from accounts
+            where user_id = :user_id
+            order by created_at desc
+            """,
+            {"user_id": user_id},
+        )
+
+    def create_transaction(self, user_id: UUID, payload: TransactionCreate) -> dict[str, Any]:
+        self._ensure_auth_columns()
+        account = self._run("select id from accounts where id = :id and user_id = :user_id limit 1", {"id": payload.accountId, "user_id": user_id})
+        if not account:
+            raise HTTPException(status_code=404, detail=f"account not found: {payload.accountId}")
+        row = self._run(
+            """
+            insert into transactions (id, user_id, account_id, amount, currency, transaction_at, direction, category, note)
+            values (:id, :user_id, :account_id, :amount, :currency, :transaction_at, :direction, :category, :note)
+            returning id, account_id, direction, amount, currency, transaction_at, category, note
+            """,
+            {
+                "id": str(uuid4()),
+                "user_id": user_id,
+                "account_id": payload.accountId,
+                "amount": _to_float(payload.amount),
+                "currency": payload.currency,
+                "transaction_at": payload.occurredAt,
+                "direction": payload.direction,
+                "category": payload.category,
+                "note": payload.note,
+            },
+        )[0]
+        sign = 1 if payload.direction == "income" else -1
+        self._run(
+            "update accounts set current_balance = current_balance + :delta, updated_at = now() where id = :id",
+            {"delta": sign * _to_float(payload.amount), "id": payload.accountId},
+        )
+        return row
+
+    def list_transactions(self, user_id: UUID) -> list[dict[str, Any]]:
+        return self._run(
+            """
+            select id, account_id, direction, amount, currency, transaction_at, category, note
+            from transactions
+            where user_id = :user_id
+            order by transaction_at desc
+            """,
+            {"user_id": user_id},
+        )
+
+    def update_account(self, user_id: UUID, account_id: UUID, payload: AccountUpdate) -> dict[str, Any]:
+        current = self._run(
+            "select id, name, account_type, currency, current_balance, created_at from accounts where id = :id and user_id = :user_id limit 1",
+            {"id": account_id, "user_id": user_id},
+        )
+        if not current:
+            raise HTTPException(status_code=404, detail=f"account not found: {account_id}")
+        merged = current[0].copy()
+        updates = payload.model_dump(exclude_none=True)
+        if "name" in updates:
+            merged["name"] = updates["name"]
+        if "accountType" in updates:
+            merged["account_type"] = updates["accountType"]
+        if "currency" in updates:
+            merged["currency"] = updates["currency"]
+        row = self._run(
+            """
+            update accounts
+            set name = :name, account_type = :account_type, currency = :currency, updated_at = now()
+            where id = :id and user_id = :user_id
+            returning id, name, account_type, currency, current_balance, created_at
+            """,
+            {
+                "id": account_id,
+                "user_id": user_id,
+                "name": merged["name"],
+                "account_type": merged["account_type"],
+                "currency": merged["currency"],
+            },
+        )[0]
+        return row
+
+    def update_transaction(self, user_id: UUID, transaction_id: UUID, payload: TransactionUpdate) -> dict[str, Any]:
+        current = self._run(
+            """
+            select id, account_id, direction, amount, currency, transaction_at, category, note
+            from transactions
+            where id = :id and user_id = :user_id
+            limit 1
+            """,
+            {"id": transaction_id, "user_id": user_id},
+        )
+        if not current:
+            raise HTTPException(status_code=404, detail=f"transaction not found: {transaction_id}")
+        merged = current[0].copy()
+        updates = payload.model_dump(exclude_none=True)
+        if "direction" in updates:
+            merged["direction"] = updates["direction"]
+        if "amount" in updates:
+            merged["amount"] = _to_float(updates["amount"])
+        if "currency" in updates:
+            merged["currency"] = updates["currency"]
+        if "category" in updates:
+            merged["category"] = updates["category"]
+        if "note" in updates:
+            merged["note"] = updates["note"]
+        row = self._run(
+            """
+            update transactions
+            set direction = :direction, amount = :amount, currency = :currency, category = :category, note = :note, updated_at = now()
+            where id = :id and user_id = :user_id
+            returning id, account_id, direction, amount, currency, transaction_at, category, note
+            """,
+            {
+                "id": transaction_id,
+                "user_id": user_id,
+                "direction": merged["direction"],
+                "amount": merged["amount"],
+                "currency": merged["currency"],
+                "category": merged.get("category"),
+                "note": merged.get("note"),
+            },
+        )[0]
+        return row
+
+
+def get_persistence() -> Persistence:
+    if settings.storage_backend == "postgres":
+        return PostgresPersistence(settings.database_url, settings.default_user_id)
+    return InMemoryPersistence()
