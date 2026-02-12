@@ -79,13 +79,16 @@ class Persistence:
     def update_transaction(self, user_id: UUID, transaction_id: UUID, payload: TransactionUpdate) -> dict[str, Any]:
         raise NotImplementedError
 
+    def delete_user(self, user_id: UUID) -> None:
+        raise NotImplementedError
+
 
 class InMemoryPersistence(Persistence):
     def get_app_settings(self) -> AppSettings:
         return AppSettings(**store.settings)
 
     def update_app_settings(self, payload: AppSettingsUpdate) -> AppSettings:
-        store.settings.update(payload.model_dump(exclude_none=True))
+        store.settings.update(payload.model_dump(exclude_unset=True))
         return AppSettings(**store.settings)
 
     def list_locales(self) -> list[str]:
@@ -431,6 +434,32 @@ class InMemoryPersistence(Persistence):
         store.transactions[transaction_id] = row
         return row
 
+    def delete_user(self, user_id: UUID) -> None:
+        if user_id in store.users:
+            del store.users[user_id]
+        if user_id in store.user_credentials:
+            del store.user_credentials[user_id]
+        vehicle_ids = {k for k, v in store.vehicles.items() if v.get("user_id") == user_id}
+        property_ids = {k for k, v in store.properties.items() if v.get("user_id") == user_id}
+        insurance_ids = {k for k, v in store.insurances.items() if v.get("user_id") == user_id}
+        integration_ids = {k for k, v in store.calendar_integrations.items() if v.get("user_id") == user_id}
+        rule_ids = {k for k, v in store.notification_rules.items() if v.get("user_id") == user_id}
+        store.accounts = {k: v for k, v in store.accounts.items() if v.get("user_id") != user_id}
+        store.transactions = {k: v for k, v in store.transactions.items() if v.get("user_id") != user_id}
+        store.vehicles = {k: v for k, v in store.vehicles.items() if v.get("user_id") != user_id}
+        store.vehicle_services = {k: v for k, v in store.vehicle_services.items() if v.get("vehicle_id") not in vehicle_ids}
+        store.vehicle_service_rules = {k: v for k, v in store.vehicle_service_rules.items() if v.get("vehicle_id") not in vehicle_ids}
+        store.properties = {k: v for k, v in store.properties.items() if v.get("user_id") != user_id}
+        store.property_costs = {k: v for k, v in store.property_costs.items() if v.get("property_id") not in property_ids}
+        store.insurances = {k: v for k, v in store.insurances.items() if v.get("user_id") != user_id}
+        store.insurance_premiums = {k: v for k, v in store.insurance_premiums.items() if v.get("insurance_id") not in insurance_ids}
+        store.calendar_integrations = {k: v for k, v in store.calendar_integrations.items() if v.get("user_id") != user_id}
+        store.notification_rules = {k: v for k, v in store.notification_rules.items() if v.get("user_id") != user_id}
+        store.notification_deliveries = {k: v for k, v in store.notification_deliveries.items() if v.get("notification_rule_id") not in rule_ids}
+        store.calendar_events = {
+            k: v for k, v in store.calendar_events.items() if v.get("calendar_integration_id") not in integration_ids
+        }
+
 
 class PostgresPersistence(Persistence):
     def __init__(self, database_url: str, default_user_id: str) -> None:
@@ -459,7 +488,8 @@ class PostgresPersistence(Persistence):
               add column if not exists auto_backup_enabled boolean not null default false,
               add column if not exists auto_backup_interval_minutes integer not null default 1440,
               add column if not exists auto_backup_retention_days integer not null default 30,
-              add column if not exists auto_backup_last_run_at timestamptz
+              add column if not exists auto_backup_last_run_at timestamptz,
+              add column if not exists session_timeout_minutes integer
             """
         )
 
@@ -505,7 +535,8 @@ class PostgresPersistence(Persistence):
         rows = self._run(
             """
             select default_locale, default_timezone, calendar_provider, calendar_sync_enabled, self_registration_enabled, smtp_enabled,
-                   auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at
+                   auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at,
+                   session_timeout_minutes
             from app_settings
             where user_id = :user_id
             """,
@@ -516,16 +547,18 @@ class PostgresPersistence(Persistence):
                 """
                 insert into app_settings (
                   id, user_id, default_timezone, calendar_provider, calendar_sync_enabled, self_registration_enabled, smtp_enabled,
-                  default_locale, auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at
+                  default_locale, auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at,
+                  session_timeout_minutes
                 )
-                values (:id, :user_id, 'Europe/Prague', 'google', true, true, false, 'en', false, 1440, 30, null)
+                values (:id, :user_id, 'Europe/Prague', 'google', true, true, false, 'en', false, 1440, 30, null, null)
                 """,
                 {"id": str(uuid4()), "user_id": self.default_user_id},
             )
             rows = self._run(
                 """
                 select default_locale, default_timezone, calendar_provider, calendar_sync_enabled, self_registration_enabled, smtp_enabled,
-                       auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at
+                       auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at,
+                       session_timeout_minutes
                 from app_settings where user_id = :user_id
                 """,
                 {"user_id": self.default_user_id},
@@ -542,12 +575,13 @@ class PostgresPersistence(Persistence):
             autoBackupIntervalMinutes=row["auto_backup_interval_minutes"],
             autoBackupRetentionDays=row["auto_backup_retention_days"],
             autoBackupLastRunAt=row["auto_backup_last_run_at"],
+            sessionTimeoutMinutes=row.get("session_timeout_minutes"),
         )
 
     def update_app_settings(self, payload: AppSettingsUpdate) -> AppSettings:
         current = self.get_app_settings()
         merged = current.model_dump()
-        merged.update(payload.model_dump(exclude_none=True))
+        merged.update(payload.model_dump(exclude_unset=True))
         self._run(
             """
             update app_settings
@@ -561,6 +595,7 @@ class PostgresPersistence(Persistence):
                 auto_backup_interval_minutes = :auto_backup_interval_minutes,
                 auto_backup_retention_days = :auto_backup_retention_days,
                 auto_backup_last_run_at = :auto_backup_last_run_at,
+                session_timeout_minutes = :session_timeout_minutes,
                 updated_at = now()
             where user_id = :user_id
             """,
@@ -575,6 +610,7 @@ class PostgresPersistence(Persistence):
                 "auto_backup_interval_minutes": merged["autoBackupIntervalMinutes"],
                 "auto_backup_retention_days": merged["autoBackupRetentionDays"],
                 "auto_backup_last_run_at": merged["autoBackupLastRunAt"],
+                "session_timeout_minutes": merged.get("sessionTimeoutMinutes"),
                 "user_id": self.default_user_id,
             },
         )
@@ -1050,11 +1086,13 @@ class PostgresPersistence(Persistence):
                         """
                         insert into app_settings (
                           id, user_id, default_timezone, calendar_provider, calendar_sync_enabled, self_registration_enabled, smtp_enabled,
-                          default_locale, auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at
+                          default_locale, auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at,
+                          session_timeout_minutes
                         )
                         values (
                           :id, :user_id, :default_timezone, :calendar_provider, :calendar_sync_enabled, :self_registration_enabled, :smtp_enabled,
-                          :default_locale, :auto_backup_enabled, :auto_backup_interval_minutes, :auto_backup_retention_days, :auto_backup_last_run_at
+                          :default_locale, :auto_backup_enabled, :auto_backup_interval_minutes, :auto_backup_retention_days, :auto_backup_last_run_at,
+                          :session_timeout_minutes
                         )
                         """
                     ),
@@ -1071,6 +1109,7 @@ class PostgresPersistence(Persistence):
                         "auto_backup_interval_minutes": app_settings.get("autoBackupIntervalMinutes", 1440),
                         "auto_backup_retention_days": app_settings.get("autoBackupRetentionDays", 30),
                         "auto_backup_last_run_at": app_settings.get("autoBackupLastRunAt"),
+                        "session_timeout_minutes": app_settings.get("sessionTimeoutMinutes"),
                     },
                 )
 
@@ -1338,6 +1377,10 @@ class PostgresPersistence(Persistence):
             },
         )[0]
         return row
+
+    def delete_user(self, user_id: UUID) -> None:
+        self._ensure_auth_columns()
+        self._run("delete from users where id = :id", {"id": user_id})
 
 
 def get_persistence() -> Persistence:

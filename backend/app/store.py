@@ -32,6 +32,7 @@ class InMemoryStore:
             "autoBackupIntervalMinutes": 1440,
             "autoBackupRetentionDays": 30,
             "autoBackupLastRunAt": None,
+            "sessionTimeoutMinutes": None,
         }
         self.base_locales: dict[str, dict[str, str]] = self._load_locales_from_files()
         self.custom_locales: dict[str, dict[str, str]] = {}

@@ -56,6 +56,7 @@ from .schemas import (
 )
 from .services.sync import SyncStats, compute_event_hash, compute_event_uid, make_provider_event_id
 from .persistence import get_persistence
+from .store import store
 
 app = FastAPI(
     title="My-finance API",
@@ -79,7 +80,7 @@ CUSTOM_LOCALES_DIR.mkdir(parents=True, exist_ok=True)
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 persistence = get_persistence()
 backup_scheduler_task: asyncio.Task | None = None
-active_sessions: dict[str, UUID] = {}
+active_sessions: dict[str, dict[str, Any]] = {}
 SESSION_COOKIE_NAME = "mf_session"
 
 
@@ -90,6 +91,36 @@ def _extract_token_from_request(request: Request) -> str | None:
         if len(parts) == 2 and parts[0].lower() == "bearer":
             return parts[1].strip()
     return request.cookies.get(SESSION_COOKIE_NAME)
+
+
+def _session_timeout_minutes() -> int | None:
+    try:
+        return persistence.get_app_settings().sessionTimeoutMinutes
+    except Exception:
+        return None
+
+
+def _get_session_user_id(token: str | None) -> UUID | None:
+    if not token:
+        return None
+    session = active_sessions.get(token)
+    if session is None:
+        return None
+    now = datetime.now(timezone.utc)
+    last_seen = session.get("last_seen", now)
+    timeout_minutes = _session_timeout_minutes()
+    if timeout_minutes and (now - last_seen) > timedelta(minutes=timeout_minutes):
+        del active_sessions[token]
+        return None
+    session["last_seen"] = now
+    active_sessions[token] = session
+    return session.get("user_id")
+
+
+def _create_session(user_id: UUID) -> str:
+    token = secrets.token_urlsafe(32)
+    active_sessions[token] = {"user_id": user_id, "last_seen": datetime.now(timezone.utc)}
+    return token
 
 
 def build_error_response(details: list[ApiErrorDetail], message: str = "Invalid request payload") -> JSONResponse:
@@ -121,16 +152,27 @@ async def ui_auth_middleware(request: Request, call_next):
         "/api/v1/auth/register",
         "/api/v1/auth/login",
         "/api/v1/bootstrap/restore",
+        "/api/v1/public/i18n/locales",
     }
+    if path.startswith("/api/v1/public/i18n/"):
+        return await call_next(request)
     if path.startswith("/api/v1") and path not in public_api:
         token = _extract_token_from_request(request)
-        if not token or token not in active_sessions:
+        if not _get_session_user_id(token):
             return JSONResponse(status_code=401, content={"detail": "authentication required"})
     if path.startswith("/ui") and path != "/ui/get-started":
         session_token = _extract_token_from_request(request)
-        if not session_token or session_token not in active_sessions:
+        if not _get_session_user_id(session_token):
             return RedirectResponse(url="/ui/get-started", status_code=302)
     return await call_next(request)
+
+
+@app.get("/")
+async def root(request: Request) -> RedirectResponse:
+    token = _extract_token_from_request(request)
+    if _get_session_user_id(token):
+        return RedirectResponse(url="/ui/dashboard", status_code=302)
+    return RedirectResponse(url="/ui/get-started", status_code=302)
 
 
 @app.get("/api/v1/health", response_model=HealthResponse)
@@ -167,6 +209,11 @@ async def get_locales(
     return LocaleListResponse(locales=locales)
 
 
+@app.get("/api/v1/public/i18n/locales", response_model=LocaleListResponse)
+async def get_public_locales() -> LocaleListResponse:
+    return LocaleListResponse(locales=sorted(store.base_locales.keys()))
+
+
 @app.get("/api/v1/i18n/{locale}", response_model=LocaleBundleResponse)
 async def get_locale_bundle(
     locale: str,
@@ -175,6 +222,14 @@ async def get_locale_bundle(
 ) -> LocaleBundleResponse:
     _require_user(authorization, session_token)
     messages = persistence.get_locale_bundle(locale)
+    if not messages:
+        raise HTTPException(status_code=404, detail=f"locale not found: {locale}")
+    return LocaleBundleResponse(locale=locale, messages=messages)
+
+
+@app.get("/api/v1/public/i18n/{locale}", response_model=LocaleBundleResponse)
+async def get_public_locale_bundle(locale: str) -> LocaleBundleResponse:
+    messages = store.base_locales.get(locale, {})
     if not messages:
         raise HTTPException(status_code=404, detail=f"locale not found: {locale}")
     return LocaleBundleResponse(locale=locale, messages=messages)
@@ -247,7 +302,7 @@ def _require_user(authorization: str | None = None, session_token: str | None = 
         token = _token_from_header(authorization)
     if not token:
         raise HTTPException(status_code=401, detail="missing session token")
-    user_id = active_sessions.get(token)
+    user_id = _get_session_user_id(token)
     if user_id is None:
         raise HTTPException(status_code=401, detail="invalid or expired token")
     return user_id
@@ -256,9 +311,8 @@ def _require_user(authorization: str | None = None, session_token: str | None = 
 @app.post("/api/v1/auth/register", response_model=AuthResponse, status_code=201)
 async def auth_register(payload: RegisterRequest, response: Response) -> AuthResponse:
     user = persistence.register_user(payload.email, payload.password, payload.fullName)
-    token = secrets.token_urlsafe(32)
-    active_sessions[token] = user["id"]
-    response.set_cookie(SESSION_COOKIE_NAME, token, httponly=True, samesite="lax", secure=False, max_age=60 * 60 * 24 * 7)
+    token = _create_session(user["id"])
+    response.set_cookie(SESSION_COOKIE_NAME, token, httponly=True, samesite="lax", secure=False)
     return AuthResponse(token=token, userId=user["id"], email=user["email"], fullName=user.get("full_name"))
 
 
@@ -267,9 +321,11 @@ async def auth_login(payload: LoginRequest, response: Response) -> AuthResponse:
     user = persistence.authenticate_user(payload.email, payload.password)
     if user is None:
         raise HTTPException(status_code=401, detail="invalid email or password")
-    token = secrets.token_urlsafe(32)
-    active_sessions[token] = user["id"]
-    response.set_cookie(SESSION_COOKIE_NAME, token, httponly=True, samesite="lax", secure=False, max_age=60 * 60 * 24 * 7)
+    token = _create_session(user["id"])
+    if payload.rememberMe:
+        response.set_cookie(SESSION_COOKIE_NAME, token, httponly=True, samesite="lax", secure=False, max_age=60 * 60 * 24 * 30)
+    else:
+        response.set_cookie(SESSION_COOKIE_NAME, token, httponly=True, samesite="lax", secure=False)
     return AuthResponse(token=token, userId=user["id"], email=user["email"], fullName=user.get("full_name"))
 
 
@@ -294,6 +350,21 @@ async def auth_logout(
         del active_sessions[token]
     response.delete_cookie(SESSION_COOKIE_NAME)
     return {"ok": True}
+
+
+@app.delete("/api/v1/auth/me")
+async def delete_my_account(
+    response: Response,
+    authorization: str | None = Header(default=None),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> dict[str, bool]:
+    user_id = _require_user(authorization, session_token)
+    persistence.delete_user(user_id)
+    tokens_to_remove = [token for token, data in active_sessions.items() if data.get("user_id") == user_id]
+    for token in tokens_to_remove:
+        del active_sessions[token]
+    response.delete_cookie(SESSION_COOKIE_NAME)
+    return {"deleted": True}
 
 
 @app.post("/api/v1/accounts", response_model=AccountResponse, status_code=201)

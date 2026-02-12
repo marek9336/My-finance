@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
-    :root { --bg:#eef3f9; --surface:#fff; --text:#10243d; --muted:#5a6f8f; --primary:#0f6ecf; --border:#d8e2f0; --shadow:0 8px 24px rgba(16,36,61,.08); --err:#b3261e; --ok:#1b8f47; }
-    body.dark { --bg:#0c1625; --surface:#13253a; --text:#e6f0ff; --muted:#a4bddf; --primary:#5ea8ff; --border:#274565; --shadow:0 8px 24px rgba(0,0,0,.35); --err:#ff8a80; --ok:#6ed69b; }
+    :root { --bg:#eef3f9; --surface:#fff; --text:#10243d; --primary:#0f6ecf; --border:#d8e2f0; --shadow:0 8px 24px rgba(16,36,61,.08); --err:#b3261e; --ok:#1b8f47; }
+    body.dark { --bg:#0c1625; --surface:#13253a; --text:#e6f0ff; --primary:#5ea8ff; --border:#274565; --shadow:0 8px 24px rgba(0,0,0,.35); --err:#ff8a80; --ok:#6ed69b; }
     * { box-sizing: border-box; }
     body { margin: 0; padding: 24px; font-family: "Roboto", sans-serif; background: var(--bg); color: var(--text); }
     .container { max-width: 1120px; margin: 0 auto; display: grid; gap: 16px; }
@@ -39,16 +39,15 @@
     table { width: 100%; border-collapse: collapse; }
     th, td { border-bottom: 1px solid var(--border); text-align: left; padding: 8px; }
     #editPanel { display: none; }
+    #chartCanvas { width: 100%; height: 260px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
+    body.dark #chartCanvas { background: #0f1f33; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="card">
       <div class="topbar">
-        <div>
-          <h1 id="title">Dashboard</h1>
-          <p id="subtitle">Accounts and transactions.</p>
-        </div>
+        <div><h1 id="title">Dashboard</h1><p id="subtitle">Accounts and transactions.</p></div>
         <div class="top-actions">
           <a class="nav" href="/ui/dashboard" id="navDashboard">Dashboard</a>
           <a class="nav" href="/ui/settings" id="navSettings">Settings</a>
@@ -59,6 +58,26 @@
         </div>
       </div>
       <div id="msg" class="msg"></div>
+    </div>
+
+    <div class="card">
+      <h3 id="chartTitle">Balance Trend</h3>
+      <div class="row">
+        <div>
+          <label id="chartAccountLabel" for="chartAccount">Account</label>
+          <select id="chartAccount"></select>
+        </div>
+        <div>
+          <label id="chartPeriodLabel" for="chartPeriod">Period</label>
+          <select id="chartPeriod">
+            <option value="week">7 days</option>
+            <option value="month">30 days</option>
+            <option value="year">365 days</option>
+            <option value="all">All</option>
+          </select>
+        </div>
+      </div>
+      <canvas id="chartCanvas" width="1040" height="260"></canvas>
     </div>
 
     <div class="card row">
@@ -103,38 +122,47 @@
     </div>
   </div>
   <script>
-    const I18N = {
+    const FALLBACK = {
       en: {
-        title: "Dashboard", subtitle: "Accounts and transactions.", dashboard: "Dashboard", settings: "Settings",
-        createAccount: "Create Account", createTx: "Create Transaction", refresh: "Refresh Data", logout: "Logout",
-        edit: "Edit", advanced: "Advanced JSON", accounts: "Accounts", transactions: "Transactions",
-        accountCreated: "Account created.", txCreated: "Transaction created.", createAccountFirst: "Create account first.",
-        authReq: "Authentication required.", name: "Name", type: "Type", currency: "Currency", balance: "Balance",
-        date: "Date", direction: "Direction", amount: "Amount", category: "Category", note: "Note",
-        phAccount: "Main account", phCategory: "Category (optional)", phNote: "Note (optional)",
-        save: "Save", cancel: "Cancel", editAccount: "Edit account", editTransaction: "Edit transaction", saved: "Saved."
+        title:"Dashboard", subtitle:"Accounts and transactions.", dashboard:"Dashboard", settings:"Settings", createAccount:"Create Account", createTx:"Create Transaction", refresh:"Refresh Data", logout:"Logout",
+        edit:"Edit", advanced:"Advanced JSON", accounts:"Accounts", transactions:"Transactions", accountCreated:"Account created.", txCreated:"Transaction created.", createAccountFirst:"Create account first.",
+        authReq:"Authentication required.", name:"Name", type:"Type", currency:"Currency", balance:"Balance", date:"Date", direction:"Direction", amount:"Amount", category:"Category", note:"Note",
+        phAccount:"Main account", phCategory:"Category (optional)", phNote:"Note (optional)", save:"Save", cancel:"Cancel", editAccount:"Edit account", editTransaction:"Edit transaction", saved:"Saved.",
+        checking:"Checking", cash:"Cash", savings:"Savings", income:"Income", expense:"Expense", chartTitle:"Balance Trend", chartAccount:"Account", chartPeriod:"Period",
+        periodWeek:"7 days", periodMonth:"30 days", periodYear:"365 days", periodAll:"All", allAccounts:"All accounts"
       },
       cs: {
-        title: "Přehled", subtitle: "Účty a transakce.", dashboard: "Přehled", settings: "Nastavení",
-        createAccount: "Vytvořit účet", createTx: "Vytvořit transakci", refresh: "Obnovit data", logout: "Odhlásit",
-        edit: "Upravit", advanced: "Pokročilý JSON", accounts: "Účty", transactions: "Transakce",
-        accountCreated: "Účet byl vytvořen.", txCreated: "Transakce byla vytvořena.", createAccountFirst: "Nejdříve vytvoř účet.",
-        authReq: "Je vyžadováno přihlášení.", name: "Název", type: "Typ", currency: "Měna", balance: "Zůstatek",
-        date: "Datum", direction: "Směr", amount: "Částka", category: "Kategorie", note: "Poznámka",
-        phAccount: "Hlavní účet", phCategory: "Kategorie (volitelné)", phNote: "Poznámka (volitelné)",
-        save: "Uložit", cancel: "Zrušit", editAccount: "Upravit účet", editTransaction: "Upravit transakci", saved: "Uloženo."
+        title:"Přehled", subtitle:"Účty a transakce.", dashboard:"Přehled", settings:"Nastavení", createAccount:"Vytvořit účet", createTx:"Vytvořit transakci", refresh:"Obnovit data", logout:"Odhlásit",
+        edit:"Upravit", advanced:"Pokročilý JSON", accounts:"Účty", transactions:"Transakce", accountCreated:"Účet byl vytvořen.", txCreated:"Transakce byla vytvořena.", createAccountFirst:"Nejdříve vytvoř účet.",
+        authReq:"Je vyžadováno přihlášení.", name:"Název", type:"Typ", currency:"Měna", balance:"Zůstatek", date:"Datum", direction:"Směr", amount:"Částka", category:"Kategorie", note:"Poznámka",
+        phAccount:"Hlavní účet", phCategory:"Kategorie (volitelné)", phNote:"Poznámka (volitelné)", save:"Uložit", cancel:"Zrušit", editAccount:"Upravit účet", editTransaction:"Upravit transakci", saved:"Uloženo.",
+        checking:"Běžný účet", cash:"Hotovost", savings:"Spoření", income:"Příjem", expense:"Výdaj", chartTitle:"Vývoj zůstatku", chartAccount:"Účet", chartPeriod:"Období",
+        periodWeek:"7 dní", periodMonth:"30 dní", periodYear:"365 dní", periodAll:"Vše", allAccounts:"Všechny účty"
       }
     };
+    let M = {};
     let editState = null;
+    let allAccounts = [];
+    let allTransactions = [];
     function lang() { return localStorage.getItem("mf_lang") || "en"; }
-    function t(key) { return (I18N[lang()] && I18N[lang()][key]) || I18N.en[key] || key; }
+    function t(key) { return M[key] || FALLBACK[lang()][key] || key; }
+    async function loadLocaleMessages(locale) {
+      M = { ...FALLBACK[locale] };
+      try {
+        const res = await fetch(`/api/v1/i18n/${locale}`, { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
+          M = { ...M, ...(data.messages || {}) };
+        }
+      } catch (_) {}
+    }
     function applyTheme() {
       const theme = localStorage.getItem("mf_theme") || "system";
       document.body.classList.remove("dark");
-      if (theme === "dark" || (theme === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
-        document.body.classList.add("dark");
-      }
+      if (theme === "dark" || (theme === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches)) document.body.classList.add("dark");
     }
+    function accountTypeLabel(v) { if (v === "checking") return t("checking"); if (v === "cash") return t("cash"); if (v === "savings") return t("savings"); return v; }
+    function directionLabel(v) { if (v === "income") return t("income"); if (v === "expense") return t("expense"); return v; }
     function applyTexts() {
       document.documentElement.lang = lang();
       document.getElementById("title").textContent = t("title");
@@ -155,6 +183,21 @@
       document.getElementById("txNote").placeholder = t("phNote");
       document.getElementById("saveEditBtn").textContent = t("save");
       document.getElementById("cancelEditBtn").textContent = t("cancel");
+      document.getElementById("chartTitle").textContent = t("chartTitle");
+      document.getElementById("chartAccountLabel").textContent = t("chartAccount");
+      document.getElementById("chartPeriodLabel").textContent = t("chartPeriod");
+      const accountType = document.getElementById("accType");
+      accountType.options[0].textContent = t("checking");
+      accountType.options[1].textContent = t("cash");
+      accountType.options[2].textContent = t("savings");
+      const txDir = document.getElementById("txDirection");
+      txDir.options[0].textContent = t("expense");
+      txDir.options[1].textContent = t("income");
+      const period = document.getElementById("chartPeriod");
+      period.options[0].textContent = t("periodWeek");
+      period.options[1].textContent = t("periodMonth");
+      period.options[2].textContent = t("periodYear");
+      period.options[3].textContent = t("periodAll");
     }
     function setMsg(text, isError = false) {
       const m = document.getElementById("msg");
@@ -189,7 +232,7 @@
       const tb = table.querySelector("tbody");
       accounts.forEach((a) => {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${a.name}</td><td>${a.accountType}</td><td>${a.currency}</td><td>${a.currentBalance}</td><td><button data-id="${a.id}" data-name="${encodeURIComponent(a.name)}" class="edit-account secondary" style="width:auto">${t("edit")}</button></td>`;
+        tr.innerHTML = `<td>${a.name}</td><td>${accountTypeLabel(a.accountType)}</td><td>${a.currency}</td><td>${a.currentBalance}</td><td><button data-id="${a.id}" data-name="${encodeURIComponent(a.name)}" class="edit-account secondary" style="width:auto">${t("edit")}</button></td>`;
         tb.appendChild(tr);
       });
     }
@@ -199,12 +242,78 @@
       const tb = table.querySelector("tbody");
       transactions.forEach((tx) => {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${new Date(tx.occurredAt).toLocaleString()}</td><td>${tx.direction}</td><td>${tx.amount} ${tx.currency}</td><td>${tx.category || ""}</td><td>${tx.note || ""}</td><td><button data-id="${tx.id}" data-note="${encodeURIComponent(tx.note || "")}" class="edit-tx secondary" style="width:auto">${t("edit")}</button></td>`;
+        tr.innerHTML = `<td>${new Date(tx.occurredAt).toLocaleString()}</td><td>${directionLabel(tx.direction)}</td><td>${tx.amount} ${tx.currency}</td><td>${tx.category || ""}</td><td>${tx.note || ""}</td><td><button data-id="${tx.id}" data-note="${encodeURIComponent(tx.note || "")}" class="edit-tx secondary" style="width:auto">${t("edit")}</button></td>`;
         tb.appendChild(tr);
       });
     }
+    function chartDataset() {
+      const period = document.getElementById("chartPeriod").value;
+      const accountId = document.getElementById("chartAccount").value;
+      let filtered = [...allTransactions];
+      if (accountId && accountId !== "all") filtered = filtered.filter((t) => t.accountId === accountId);
+      const now = Date.now();
+      if (period === "week") filtered = filtered.filter((t) => now - new Date(t.occurredAt).getTime() <= 7 * 86400000);
+      if (period === "month") filtered = filtered.filter((t) => now - new Date(t.occurredAt).getTime() <= 30 * 86400000);
+      if (period === "year") filtered = filtered.filter((t) => now - new Date(t.occurredAt).getTime() <= 365 * 86400000);
+      filtered.sort((a, b) => new Date(a.occurredAt) - new Date(b.occurredAt));
+      const map = new Map();
+      filtered.forEach((tx) => {
+        const day = new Date(tx.occurredAt).toISOString().slice(0, 10);
+        const sign = tx.direction === "income" ? 1 : -1;
+        map.set(day, (map.get(day) || 0) + sign * Number(tx.amount || 0));
+      });
+      const labels = [...map.keys()];
+      let run = 0;
+      const values = labels.map((k) => { run += map.get(k); return run; });
+      return { labels, values };
+    }
+    function drawChart() {
+      const canvas = document.getElementById("chartCanvas");
+      const ctx = canvas.getContext("2d");
+      const { labels, values } = chartDataset();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#0f6ecf";
+      ctx.fillStyle = "#6eaeea";
+      if (!values.length) {
+        ctx.fillStyle = "#7d8fa8";
+        ctx.fillText("No data", 20, 30);
+        return;
+      }
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const pad = 30;
+      const w = canvas.width - pad * 2;
+      const h = canvas.height - pad * 2;
+      const yScale = (v) => pad + (max === min ? h / 2 : h - ((v - min) / (max - min)) * h);
+      const xScale = (i) => pad + (labels.length <= 1 ? 0 : (i / (labels.length - 1)) * w);
+      ctx.beginPath();
+      values.forEach((v, i) => { const x = xScale(i); const y = yScale(v); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+      ctx.stroke();
+      ctx.fillStyle = "#274565";
+      ctx.font = "12px Roboto";
+      ctx.fillText(`${labels[0]} -> ${labels[labels.length - 1]}`, pad, canvas.height - 8);
+    }
+    function fillChartAccountSelect() {
+      const sel = document.getElementById("chartAccount");
+      const current = sel.value || "all";
+      sel.innerHTML = "";
+      const allOpt = document.createElement("option");
+      allOpt.value = "all";
+      allOpt.textContent = t("allAccounts");
+      sel.appendChild(allOpt);
+      allAccounts.forEach((a) => {
+        const o = document.createElement("option");
+        o.value = a.id;
+        o.textContent = a.name;
+        sel.appendChild(o);
+      });
+      sel.value = [...sel.options].some((o) => o.value === current) ? current : "all";
+    }
     async function refreshAll() {
       const [accounts, transactions] = await Promise.all([api("/api/v1/accounts"), api("/api/v1/transactions")]);
+      allAccounts = accounts;
+      allTransactions = transactions;
       const sel = document.getElementById("txAccount");
       sel.innerHTML = "";
       accounts.forEach((a) => {
@@ -213,8 +322,10 @@
         o.textContent = `${a.name} (${a.currentBalance} ${a.currency})`;
         sel.appendChild(o);
       });
+      fillChartAccountSelect();
       renderAccounts(accounts);
       renderTransactions(transactions);
+      drawChart();
       document.getElementById("out").textContent = JSON.stringify({ accounts, transactions }, null, 2);
     }
     function openEditPanelAccount(accountId, currentName) {
@@ -244,10 +355,7 @@
       closeEdit();
       await refreshAll();
     }
-    function closeEdit() {
-      editState = null;
-      document.getElementById("editPanel").style.display = "none";
-    }
+    function closeEdit() { editState = null; document.getElementById("editPanel").style.display = "none"; }
     async function createAccount() {
       await api("/api/v1/accounts", "POST", {
         name: document.getElementById("accName").value,
@@ -273,10 +381,7 @@
       setMsg(t("txCreated"));
       await refreshAll();
     }
-    async function logout() {
-      await api("/api/v1/auth/logout", "POST");
-      window.location.href = "/ui/get-started";
-    }
+    async function logout() { await api("/api/v1/auth/logout", "POST"); window.location.href = "/ui/get-started"; }
     async function safe(fn) { try { await fn(); } catch (e) { setMsg(mapError(e.message), true); } }
 
     const menu = document.getElementById("userMenu");
@@ -300,11 +405,16 @@
     });
     document.getElementById("saveEditBtn").addEventListener("click", () => safe(saveEdit));
     document.getElementById("cancelEditBtn").addEventListener("click", closeEdit);
+    document.getElementById("chartPeriod").addEventListener("change", drawChart);
+    document.getElementById("chartAccount").addEventListener("change", drawChart);
 
-    applyTheme();
-    applyTexts();
-    safe(loadUser);
-    safe(refreshAll);
+    (async () => {
+      applyTheme();
+      await loadLocaleMessages(lang());
+      applyTexts();
+      await safe(loadUser);
+      await safe(refreshAll);
+    })();
   </script>
 </body>
 </html>

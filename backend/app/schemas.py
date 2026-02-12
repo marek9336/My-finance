@@ -334,6 +334,7 @@ class AppSettings(BaseModel):
     autoBackupIntervalMinutes: int = Field(default=1440, ge=5)
     autoBackupRetentionDays: int = Field(default=30, ge=1)
     autoBackupLastRunAt: Optional[datetime] = None
+    sessionTimeoutMinutes: Optional[int] = Field(default=None, ge=1)
 
 
 class AppSettingsUpdate(BaseModel):
@@ -347,6 +348,7 @@ class AppSettingsUpdate(BaseModel):
     autoBackupIntervalMinutes: Optional[int] = Field(default=None, ge=5)
     autoBackupRetentionDays: Optional[int] = Field(default=None, ge=1)
     autoBackupLastRunAt: Optional[datetime] = None
+    sessionTimeoutMinutes: Optional[int] = Field(default=None, ge=1)
 
 
 class LocaleListResponse(BaseModel):
@@ -392,6 +394,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str = Field(min_length=8, max_length=128)
+    rememberMe: bool = False
 
     @field_validator("email")
     @classmethod
