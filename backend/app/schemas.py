@@ -440,6 +440,7 @@ class AccountCreate(BaseModel):
     accountType: str = Field(default="checking", min_length=1, max_length=50)
     currency: str = Field(default="CZK")
     initialBalance: Decimal = Field(default=Decimal("0"), ge=Decimal("0"))
+    initialBalanceAt: Optional[datetime] = None
 
     @field_validator("currency")
     @classmethod
@@ -455,6 +456,8 @@ class AccountResponse(BaseModel):
     name: str
     accountType: str
     currency: str
+    initialBalance: Decimal
+    initialBalanceAt: Optional[datetime] = None
     currentBalance: Decimal
     createdAt: datetime
 
@@ -463,6 +466,8 @@ class AccountUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=120)
     accountType: Optional[str] = Field(default=None, min_length=1, max_length=50)
     currency: Optional[str] = None
+    initialBalance: Optional[Decimal] = Field(default=None, ge=Decimal("0"))
+    initialBalanceAt: Optional[datetime] = None
 
     @field_validator("currency")
     @classmethod
@@ -483,6 +488,10 @@ class TransactionCreate(BaseModel):
     occurredAt: datetime
     category: Optional[str] = None
     note: Optional[str] = None
+    recurringFrequency: Optional[str] = None
+    recurringCount: int = Field(default=1, ge=1, le=365)
+    recurringDayOfMonth: Optional[int] = Field(default=None, ge=1, le=31)
+    recurringWeekendPolicy: Optional[str] = None
 
     @field_validator("direction")
     @classmethod
@@ -500,6 +509,36 @@ class TransactionCreate(BaseModel):
             raise ValueError("must be 3-letter ISO code")
         return up
 
+    @field_validator("recurringFrequency")
+    @classmethod
+    def validate_recurring_frequency(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        v = value.lower().strip()
+        if v not in {"daily", "weekly", "monthly", "yearly"}:
+            raise ValueError("recurringFrequency must be daily, weekly, monthly, yearly or null")
+        return v
+
+    @field_validator("recurringWeekendPolicy")
+    @classmethod
+    def validate_recurring_weekend_policy(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        v = value.lower().strip()
+        if v not in {"exact", "thursday", "friday", "monday"}:
+            raise ValueError("recurringWeekendPolicy must be exact, thursday, friday, monday or null")
+        return v
+
+    @model_validator(mode="after")
+    def validate_recurring(self) -> "TransactionCreate":
+        if self.recurringFrequency is None and self.recurringCount != 1:
+            raise ValueError("recurringCount can be > 1 only when recurringFrequency is set")
+        if self.recurringFrequency is None and self.recurringDayOfMonth is not None:
+            raise ValueError("recurringDayOfMonth requires recurringFrequency")
+        if self.recurringFrequency is None and self.recurringWeekendPolicy is not None:
+            raise ValueError("recurringWeekendPolicy requires recurringFrequency")
+        return self
+
 
 class TransactionResponse(BaseModel):
     id: UUID
@@ -510,9 +549,16 @@ class TransactionResponse(BaseModel):
     occurredAt: datetime
     category: Optional[str] = None
     note: Optional[str] = None
+    transferGroupId: Optional[UUID] = None
+    recurringGroupId: Optional[UUID] = None
+    recurringFrequency: Optional[str] = None
+    recurringIndex: Optional[int] = None
+    recurringDayOfMonth: Optional[int] = None
+    recurringWeekendPolicy: Optional[str] = None
 
 
 class TransactionUpdate(BaseModel):
+    accountId: Optional[UUID] = None
     direction: Optional[str] = None
     amount: Optional[Decimal] = Field(default=None, gt=Decimal("0"))
     currency: Optional[str] = None
@@ -539,3 +585,52 @@ class TransactionUpdate(BaseModel):
         if len(up) != 3:
             raise ValueError("must be 3-letter ISO code")
         return up
+
+
+class TransactionTransferCreate(BaseModel):
+    fromAccountId: UUID
+    toAccountId: UUID
+    amount: Decimal = Field(gt=Decimal("0"))
+    currency: str
+    occurredAt: datetime
+    category: Optional[str] = None
+    note: Optional[str] = None
+
+    @field_validator("currency")
+    @classmethod
+    def validate_currency(cls, value: str) -> str:
+        up = value.upper()
+        if len(up) != 3:
+            raise ValueError("must be 3-letter ISO code")
+        return up
+
+    @model_validator(mode="after")
+    def validate_accounts(self) -> "TransactionTransferCreate":
+        if self.fromAccountId == self.toAccountId:
+            raise ValueError("fromAccountId and toAccountId must be different")
+        return self
+
+
+class TransactionTransferResponse(BaseModel):
+    transferGroupId: UUID
+    outgoing: TransactionResponse
+    incoming: TransactionResponse
+
+
+class TransactionCategoryStat(BaseModel):
+    category: str
+    usageCount: int
+
+
+class TransactionCategoryStatsResponse(BaseModel):
+    mostUsedCategory: Optional[str] = None
+    categories: list[TransactionCategoryStat]
+
+
+class TransactionCategoryRename(BaseModel):
+    newCategory: str = Field(min_length=1, max_length=100)
+
+
+class AccountDeleteAction(str, Enum):
+    transfer_balance = "transfer_balance"
+    delete_transactions = "delete_transactions"

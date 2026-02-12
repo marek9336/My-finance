@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from calendar import monthrange
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -13,6 +14,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from .config import settings
 from .auth_utils import hash_password, verify_password
 from .schemas import (
+    AccountDeleteAction,
     AccountCreate,
     AccountUpdate,
     AppSettings,
@@ -23,7 +25,10 @@ from .schemas import (
     NotificationRuleCreate,
     PropertyCostCreate,
     PropertyCreate,
+    TransactionCategoryStatsResponse,
+    TransactionCategoryRename,
     TransactionCreate,
+    TransactionTransferCreate,
     TransactionUpdate,
     VehicleCreate,
     VehicleServiceCreate,
@@ -34,6 +39,45 @@ from .store import store
 
 def _to_float(value: Decimal | None) -> float | None:
     return float(value) if value is not None else None
+
+
+def _tx_sign(direction: str) -> Decimal:
+    return Decimal("1") if direction == "income" else Decimal("-1")
+
+
+def _move_from_weekend(moment: datetime, weekend_policy: str | None) -> datetime:
+    policy = (weekend_policy or "exact").lower()
+    weekday = moment.weekday()
+    if weekday < 5 or policy == "exact":
+        return moment
+    if policy == "monday":
+        return moment + timedelta(days=(7 - weekday))
+    if policy == "friday":
+        return moment - timedelta(days=weekday - 4)
+    if policy == "thursday":
+        return moment - timedelta(days=weekday - 3)
+    return moment
+
+
+def _add_months(base: datetime, months: int, day_anchor: int | None = None) -> datetime:
+    total_month = (base.month - 1) + months
+    year = base.year + total_month // 12
+    month = (total_month % 12) + 1
+    target_day = day_anchor or base.day
+    target_day = min(target_day, monthrange(year, month)[1])
+    return base.replace(year=year, month=month, day=target_day)
+
+
+def _shift_recurring(base: datetime, frequency: str, step: int, day_anchor: int | None = None, weekend_policy: str | None = None) -> datetime:
+    if frequency == "daily":
+        return _move_from_weekend(base + timedelta(days=step), weekend_policy)
+    if frequency == "weekly":
+        return _move_from_weekend(base + timedelta(days=step * 7), weekend_policy)
+    if frequency == "monthly":
+        return _move_from_weekend(_add_months(base, step, day_anchor), weekend_policy)
+    if frequency == "yearly":
+        return _move_from_weekend(_add_months(base, step * 12, day_anchor), weekend_policy)
+    return _move_from_weekend(base, weekend_policy)
 
 
 class Persistence:
@@ -94,7 +138,25 @@ class Persistence:
     def update_account(self, user_id: UUID, account_id: UUID, payload: AccountUpdate) -> dict[str, Any]:
         raise NotImplementedError
 
+    def delete_account(self, user_id: UUID, account_id: UUID, action: AccountDeleteAction, target_account_id: UUID | None = None) -> None:
+        raise NotImplementedError
+
     def update_transaction(self, user_id: UUID, transaction_id: UUID, payload: TransactionUpdate) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def delete_transaction(self, user_id: UUID, transaction_id: UUID) -> None:
+        raise NotImplementedError
+
+    def transfer_between_accounts(self, user_id: UUID, payload: TransactionTransferCreate) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def list_transaction_category_stats(self, user_id: UUID) -> TransactionCategoryStatsResponse:
+        raise NotImplementedError
+
+    def rename_transaction_category(self, user_id: UUID, category: str, payload: TransactionCategoryRename) -> TransactionCategoryStatsResponse:
+        raise NotImplementedError
+
+    def delete_transaction_category(self, user_id: UUID, category: str, delete_transactions: bool) -> TransactionCategoryStatsResponse:
         raise NotImplementedError
 
     def delete_user(self, user_id: UUID) -> None:
@@ -408,6 +470,7 @@ class InMemoryPersistence(Persistence):
     def create_account(self, user_id: UUID, payload: AccountCreate) -> dict[str, Any]:
         entity_id = uuid4()
         now = datetime.utcnow()
+        initial_at = payload.initialBalanceAt or now
         row = {
             "id": entity_id,
             "user_id": user_id,
@@ -415,6 +478,7 @@ class InMemoryPersistence(Persistence):
             "account_type": payload.accountType,
             "currency": payload.currency,
             "initial_balance": payload.initialBalance,
+            "initial_balance_at": initial_at,
             "current_balance": payload.initialBalance,
             "created_at": now,
         }
@@ -422,31 +486,56 @@ class InMemoryPersistence(Persistence):
         return row
 
     def list_accounts(self, user_id: UUID) -> list[dict[str, Any]]:
-        return [a for a in store.accounts.values() if a["user_id"] == user_id]
+        return sorted([a for a in store.accounts.values() if a["user_id"] == user_id], key=lambda a: a.get("created_at", datetime.min), reverse=True)
 
     def create_transaction(self, user_id: UUID, payload: TransactionCreate) -> dict[str, Any]:
         account = store.accounts.get(payload.accountId)
         if not account or account["user_id"] != user_id:
             raise HTTPException(status_code=404, detail=f"account not found: {payload.accountId}")
-        entity_id = uuid4()
-        sign = Decimal("1") if payload.direction == "income" else Decimal("-1")
-        account["current_balance"] = Decimal(account["current_balance"]) + (payload.amount * sign)
-        row = {
-            "id": entity_id,
-            "user_id": user_id,
-            "account_id": payload.accountId,
-            "direction": payload.direction,
-            "amount": payload.amount,
-            "currency": payload.currency,
-            "transaction_at": payload.occurredAt,
-            "category": payload.category,
-            "note": payload.note,
-        }
-        store.transactions[entity_id] = row
-        return row
+        recurring_group_id = uuid4() if payload.recurringFrequency else None
+        day_anchor = payload.recurringDayOfMonth or payload.occurredAt.day
+        weekend_policy = payload.recurringWeekendPolicy or "exact"
+        first_row: dict[str, Any] | None = None
+        for idx in range(payload.recurringCount):
+            tx_time = (
+                _move_from_weekend(payload.occurredAt, weekend_policy)
+                if not payload.recurringFrequency
+                else _shift_recurring(payload.occurredAt, payload.recurringFrequency, idx, day_anchor, weekend_policy)
+            )
+            entity_id = uuid4()
+            account["current_balance"] = Decimal(account["current_balance"]) + (payload.amount * _tx_sign(payload.direction))
+            row = {
+                "id": entity_id,
+                "user_id": user_id,
+                "account_id": payload.accountId,
+                "direction": payload.direction,
+                "amount": payload.amount,
+                "currency": payload.currency,
+                "transaction_at": tx_time,
+                "category": payload.category,
+                "note": payload.note,
+                "transfer_group_id": None,
+                "recurring_group_id": recurring_group_id,
+                "recurring_frequency": payload.recurringFrequency,
+                "recurring_index": idx + 1 if payload.recurringFrequency else None,
+                "recurring_day_of_month": day_anchor if payload.recurringFrequency in {"monthly", "yearly"} else None,
+                "recurring_weekend_policy": weekend_policy if payload.recurringFrequency else None,
+            }
+            store.transactions[entity_id] = row
+            if first_row is None:
+                first_row = row
+        return first_row or {}
 
     def list_transactions(self, user_id: UUID) -> list[dict[str, Any]]:
-        return [t for t in store.transactions.values() if t["user_id"] == user_id]
+        def _ts(val: Any) -> float:
+            if isinstance(val, datetime):
+                return val.timestamp()
+            return 0.0
+        return sorted(
+            [t for t in store.transactions.values() if t["user_id"] == user_id],
+            key=lambda x: _ts(x.get("transaction_at")),
+            reverse=True,
+        )
 
     def update_account(self, user_id: UUID, account_id: UUID, payload: AccountUpdate) -> dict[str, Any]:
         row = store.accounts.get(account_id)
@@ -459,14 +548,55 @@ class InMemoryPersistence(Persistence):
             row["account_type"] = updates["accountType"]
         if "currency" in updates:
             row["currency"] = updates["currency"]
+        if "initialBalanceAt" in updates:
+            row["initial_balance_at"] = updates["initialBalanceAt"]
+        if "initialBalance" in updates:
+            row["initial_balance"] = updates["initialBalance"]
+            tx_total = Decimal("0")
+            for tx in store.transactions.values():
+                if tx.get("account_id") == account_id and tx.get("user_id") == user_id:
+                    tx_total += Decimal(tx["amount"]) * _tx_sign(tx["direction"])
+            row["current_balance"] = Decimal(row["initial_balance"]) + tx_total
         store.accounts[account_id] = row
         return row
 
+    def delete_account(self, user_id: UUID, account_id: UUID, action: AccountDeleteAction, target_account_id: UUID | None = None) -> None:
+        row = store.accounts.get(account_id)
+        if not row or row.get("user_id") != user_id:
+            raise HTTPException(status_code=404, detail=f"account not found: {account_id}")
+        account_transactions = [tx_id for tx_id, tx in store.transactions.items() if tx.get("account_id") == account_id and tx.get("user_id") == user_id]
+        if action == AccountDeleteAction.transfer_balance:
+            if target_account_id is None:
+                raise HTTPException(status_code=400, detail="targetAccountId is required for transfer_balance")
+            if target_account_id == account_id:
+                raise HTTPException(status_code=400, detail="targetAccountId must be different from account_id")
+            target = store.accounts.get(target_account_id)
+            if not target or target.get("user_id") != user_id:
+                raise HTTPException(status_code=404, detail=f"account not found: {target_account_id}")
+            target["current_balance"] = Decimal(target["current_balance"]) + Decimal(row["current_balance"])
+        for tx_id in account_transactions:
+            del store.transactions[tx_id]
+        del store.accounts[account_id]
+
     def update_transaction(self, user_id: UUID, transaction_id: UUID, payload: TransactionUpdate) -> dict[str, Any]:
-        row = store.transactions.get(transaction_id)
-        if not row or row["user_id"] != user_id:
+        original = store.transactions.get(transaction_id)
+        if not original or original["user_id"] != user_id:
             raise HTTPException(status_code=404, detail=f"transaction not found: {transaction_id}")
+        row = original.copy()
+        account = store.accounts.get(row["account_id"])
+        if not account or account["user_id"] != user_id:
+            raise HTTPException(status_code=404, detail=f"account not found: {row['account_id']}")
+        old_delta = Decimal(row["amount"]) * _tx_sign(row["direction"])
         updates = payload.model_dump(exclude_none=True)
+        if "accountId" in updates:
+            target_account = store.accounts.get(updates["accountId"])
+            if not target_account or target_account.get("user_id") != user_id:
+                raise HTTPException(status_code=404, detail=f"account not found: {updates['accountId']}")
+            if updates["accountId"] != row["account_id"]:
+                account["current_balance"] = Decimal(account["current_balance"]) - old_delta
+                row["account_id"] = updates["accountId"]
+                account = target_account
+                old_delta = Decimal("0")
         if "direction" in updates:
             row["direction"] = updates["direction"]
         if "amount" in updates:
@@ -479,8 +609,119 @@ class InMemoryPersistence(Persistence):
             row["category"] = updates["category"]
         if "note" in updates:
             row["note"] = updates["note"]
+        new_delta = Decimal(row["amount"]) * _tx_sign(row["direction"])
+        account["current_balance"] = Decimal(account["current_balance"]) - old_delta + new_delta
         store.transactions[transaction_id] = row
         return row
+
+    def delete_transaction(self, user_id: UUID, transaction_id: UUID) -> None:
+        row = store.transactions.get(transaction_id)
+        if not row or row["user_id"] != user_id:
+            raise HTTPException(status_code=404, detail=f"transaction not found: {transaction_id}")
+        account = store.accounts.get(row["account_id"])
+        if account and account.get("user_id") == user_id:
+            delta = Decimal(row["amount"]) * _tx_sign(row["direction"])
+            account["current_balance"] = Decimal(account["current_balance"]) - delta
+        del store.transactions[transaction_id]
+
+    def transfer_between_accounts(self, user_id: UUID, payload: TransactionTransferCreate) -> dict[str, Any]:
+        from_account = store.accounts.get(payload.fromAccountId)
+        to_account = store.accounts.get(payload.toAccountId)
+        if not from_account or from_account.get("user_id") != user_id:
+            raise HTTPException(status_code=404, detail=f"account not found: {payload.fromAccountId}")
+        if not to_account or to_account.get("user_id") != user_id:
+            raise HTTPException(status_code=404, detail=f"account not found: {payload.toAccountId}")
+        transfer_group_id = uuid4()
+        from_account["current_balance"] = Decimal(from_account["current_balance"]) - payload.amount
+        to_account["current_balance"] = Decimal(to_account["current_balance"]) + payload.amount
+        out_id = uuid4()
+        in_id = uuid4()
+        outgoing = {
+            "id": out_id,
+            "user_id": user_id,
+            "account_id": payload.fromAccountId,
+            "direction": "expense",
+            "amount": payload.amount,
+            "currency": payload.currency,
+            "transaction_at": payload.occurredAt,
+            "category": payload.category,
+            "note": payload.note,
+            "transfer_group_id": transfer_group_id,
+            "recurring_group_id": None,
+            "recurring_frequency": None,
+            "recurring_index": None,
+        }
+        incoming = {
+            "id": in_id,
+            "user_id": user_id,
+            "account_id": payload.toAccountId,
+            "direction": "income",
+            "amount": payload.amount,
+            "currency": payload.currency,
+            "transaction_at": payload.occurredAt,
+            "category": payload.category,
+            "note": payload.note,
+            "transfer_group_id": transfer_group_id,
+            "recurring_group_id": None,
+            "recurring_frequency": None,
+            "recurring_index": None,
+        }
+        store.transactions[out_id] = outgoing
+        store.transactions[in_id] = incoming
+        return {"transferGroupId": transfer_group_id, "outgoing": outgoing, "incoming": incoming}
+
+    def list_transaction_category_stats(self, user_id: UUID) -> TransactionCategoryStatsResponse:
+        counts: dict[str, int] = {}
+        for tx in store.transactions.values():
+            if tx.get("user_id") != user_id:
+                continue
+            category = (tx.get("category") or "").strip()
+            if not category:
+                continue
+            counts[category] = counts.get(category, 0) + 1
+        sorted_items = sorted(counts.items(), key=lambda item: (-item[1], item[0].lower()))
+        most_used = sorted_items[0][0] if sorted_items else None
+        categories = [{"category": name, "usageCount": cnt} for name, cnt in sorted_items]
+        return TransactionCategoryStatsResponse(mostUsedCategory=most_used, categories=categories)
+
+    def rename_transaction_category(self, user_id: UUID, category: str, payload: TransactionCategoryRename) -> TransactionCategoryStatsResponse:
+        old_name = category.strip()
+        if not old_name:
+            raise HTTPException(status_code=400, detail="category must not be empty")
+        changed = False
+        for tx in store.transactions.values():
+            if tx.get("user_id") != user_id:
+                continue
+            if (tx.get("category") or "").strip() == old_name:
+                tx["category"] = payload.newCategory
+                changed = True
+        if not changed:
+            raise HTTPException(status_code=404, detail=f"category not found: {category}")
+        return self.list_transaction_category_stats(user_id)
+
+    def delete_transaction_category(self, user_id: UUID, category: str, delete_transactions: bool) -> TransactionCategoryStatsResponse:
+        name = category.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="category must not be empty")
+        hits = []
+        for tx_id, tx in store.transactions.items():
+            if tx.get("user_id") != user_id:
+                continue
+            if (tx.get("category") or "").strip() == name:
+                hits.append((tx_id, tx))
+        if not hits:
+            raise HTTPException(status_code=404, detail=f"category not found: {category}")
+        if delete_transactions:
+            for tx_id, tx in hits:
+                account = store.accounts.get(tx.get("account_id"))
+                if account and account.get("user_id") == user_id:
+                    delta = Decimal(tx["amount"]) * _tx_sign(tx["direction"])
+                    account["current_balance"] = Decimal(account["current_balance"]) - delta
+                del store.transactions[tx_id]
+        else:
+            for _, tx in hits:
+                tx["category"] = None
+        return self.list_transaction_category_stats(user_id)
 
     def delete_user(self, user_id: UUID) -> None:
         if user_id in store.users:
@@ -562,19 +803,27 @@ class PostgresPersistence(Persistence):
               account_type text not null default 'checking',
               currency char(3) not null default 'CZK',
               initial_balance numeric(14,2) not null default 0,
+              initial_balance_at timestamptz,
               current_balance numeric(14,2) not null default 0,
               created_at timestamptz not null default now(),
               updated_at timestamptz not null default now()
             )
             """
         )
+        self._run("alter table if exists accounts add column if not exists initial_balance_at timestamptz")
         self._run("create index if not exists idx_accounts_user on accounts(user_id, created_at desc)")
         self._run(
             """
             alter table if exists transactions
               add column if not exists direction text not null default 'expense',
               add column if not exists category text,
-              add column if not exists note text
+              add column if not exists note text,
+              add column if not exists transfer_group_id uuid,
+              add column if not exists recurring_group_id uuid,
+              add column if not exists recurring_frequency text,
+              add column if not exists recurring_index integer,
+              add column if not exists recurring_day_of_month integer,
+              add column if not exists recurring_weekend_policy text
             """
         )
 
@@ -1074,6 +1323,8 @@ class PostgresPersistence(Persistence):
         }
 
     def import_backup(self, user_id: UUID, payload: dict[str, Any]) -> dict[str, int]:
+        self._ensure_auth_columns()
+        self._ensure_app_settings_columns()
         data = payload.get("data", {})
         with self.engine.begin() as conn:
             conn.execute(
@@ -1201,8 +1452,29 @@ class PostgresPersistence(Persistence):
                     conn.execute(stmt, params)
 
             insert_rows("vehicles", data.get("vehicles", []), ["id", "user_id", "type", "label", "vin", "plate_number", "make", "model", "production_year", "purchased_at", "current_odometer_km", "notes"], True)
-            insert_rows("accounts", data.get("accounts", []), ["id", "user_id", "name", "account_type", "currency", "initial_balance", "current_balance"], True)
-            insert_rows("transactions", data.get("transactions", []), ["id", "user_id", "account_id", "amount", "currency", "transaction_at", "direction", "category", "note"], True)
+            insert_rows("accounts", data.get("accounts", []), ["id", "user_id", "name", "account_type", "currency", "initial_balance", "initial_balance_at", "current_balance"], True)
+            insert_rows(
+                "transactions",
+                data.get("transactions", []),
+                [
+                    "id",
+                    "user_id",
+                    "account_id",
+                    "amount",
+                    "currency",
+                    "transaction_at",
+                    "direction",
+                    "category",
+                    "note",
+                    "transfer_group_id",
+                    "recurring_group_id",
+                    "recurring_frequency",
+                    "recurring_index",
+                    "recurring_day_of_month",
+                    "recurring_weekend_policy",
+                ],
+                True,
+            )
             insert_rows("vehicle_services", data.get("vehicleServices", []), ["id", "vehicle_id", "service_type", "service_at", "odometer_km", "total_cost", "currency", "vendor", "description", "receipt_url"])
             insert_rows("vehicle_service_rules", data.get("vehicleServiceRules", []), ["id", "vehicle_id", "service_type", "interval_value", "interval_unit", "lead_days", "last_service_id", "next_due_date", "next_due_odometer_km", "is_active"])
             insert_rows("properties", data.get("properties", []), ["id", "user_id", "type", "name", "address_line1", "city", "postal_code", "country_code", "acquired_at", "purchase_price", "purchase_currency", "estimated_value", "estimated_value_currency", "estimated_value_updated_at", "floor_area_m2", "land_area_m2", "notes"], True)
@@ -1312,11 +1584,12 @@ class PostgresPersistence(Persistence):
 
     def create_account(self, user_id: UUID, payload: AccountCreate) -> dict[str, Any]:
         self._ensure_auth_columns()
+        initial_balance_at = payload.initialBalanceAt or datetime.utcnow()
         row = self._run(
             """
-            insert into accounts (id, user_id, name, account_type, currency, initial_balance, current_balance)
-            values (:id, :user_id, :name, :account_type, :currency, :initial_balance, :current_balance)
-            returning id, name, account_type, currency, current_balance, created_at
+            insert into accounts (id, user_id, name, account_type, currency, initial_balance, initial_balance_at, current_balance)
+            values (:id, :user_id, :name, :account_type, :currency, :initial_balance, :initial_balance_at, :current_balance)
+            returning id, name, account_type, currency, initial_balance, initial_balance_at, current_balance, created_at
             """,
             {
                 "id": str(uuid4()),
@@ -1325,6 +1598,7 @@ class PostgresPersistence(Persistence):
                 "account_type": payload.accountType,
                 "currency": payload.currency,
                 "initial_balance": _to_float(payload.initialBalance),
+                "initial_balance_at": initial_balance_at,
                 "current_balance": _to_float(payload.initialBalance),
             },
         )[0]
@@ -1333,7 +1607,7 @@ class PostgresPersistence(Persistence):
     def list_accounts(self, user_id: UUID) -> list[dict[str, Any]]:
         return self._run(
             """
-            select id, name, account_type, currency, current_balance, created_at
+            select id, name, account_type, currency, initial_balance, initial_balance_at, current_balance, created_at
             from accounts
             where user_id = :user_id
             order by created_at desc
@@ -1346,35 +1620,59 @@ class PostgresPersistence(Persistence):
         account = self._run("select id from accounts where id = :id and user_id = :user_id limit 1", {"id": payload.accountId, "user_id": user_id})
         if not account:
             raise HTTPException(status_code=404, detail=f"account not found: {payload.accountId}")
-        row = self._run(
-            """
-            insert into transactions (id, user_id, account_id, amount, currency, transaction_at, direction, category, note)
-            values (:id, :user_id, :account_id, :amount, :currency, :transaction_at, :direction, :category, :note)
-            returning id, account_id, direction, amount, currency, transaction_at, category, note
-            """,
-            {
-                "id": str(uuid4()),
-                "user_id": user_id,
-                "account_id": payload.accountId,
-                "amount": _to_float(payload.amount),
-                "currency": payload.currency,
-                "transaction_at": payload.occurredAt,
-                "direction": payload.direction,
-                "category": payload.category,
-                "note": payload.note,
-            },
-        )[0]
-        sign = 1 if payload.direction == "income" else -1
-        self._run(
-            "update accounts set current_balance = current_balance + :delta, updated_at = now() where id = :id",
-            {"delta": sign * _to_float(payload.amount), "id": payload.accountId},
-        )
-        return row
+        recurring_group_id = str(uuid4()) if payload.recurringFrequency else None
+        day_anchor = payload.recurringDayOfMonth or payload.occurredAt.day
+        weekend_policy = payload.recurringWeekendPolicy or "exact"
+        first: dict[str, Any] | None = None
+        for idx in range(payload.recurringCount):
+            tx_time = (
+                _move_from_weekend(payload.occurredAt, weekend_policy)
+                if not payload.recurringFrequency
+                else _shift_recurring(payload.occurredAt, payload.recurringFrequency, idx, day_anchor, weekend_policy)
+            )
+            row = self._run(
+                """
+                insert into transactions (
+                  id, user_id, account_id, amount, currency, transaction_at, direction, category, note,
+                  transfer_group_id, recurring_group_id, recurring_frequency, recurring_index, recurring_day_of_month, recurring_weekend_policy
+                )
+                values (
+                  :id, :user_id, :account_id, :amount, :currency, :transaction_at, :direction, :category, :note,
+                  null, :recurring_group_id, :recurring_frequency, :recurring_index, :recurring_day_of_month, :recurring_weekend_policy
+                )
+                returning id, account_id, direction, amount, currency, transaction_at, category, note,
+                          transfer_group_id, recurring_group_id, recurring_frequency, recurring_index, recurring_day_of_month, recurring_weekend_policy
+                """,
+                {
+                    "id": str(uuid4()),
+                    "user_id": user_id,
+                    "account_id": payload.accountId,
+                    "amount": _to_float(payload.amount),
+                    "currency": payload.currency,
+                    "transaction_at": tx_time,
+                    "direction": payload.direction,
+                    "category": payload.category,
+                    "note": payload.note,
+                    "recurring_group_id": recurring_group_id,
+                    "recurring_frequency": payload.recurringFrequency,
+                    "recurring_index": idx + 1 if payload.recurringFrequency else None,
+                    "recurring_day_of_month": day_anchor if payload.recurringFrequency in {"monthly", "yearly"} else None,
+                    "recurring_weekend_policy": weekend_policy if payload.recurringFrequency else None,
+                },
+            )[0]
+            self._run(
+                "update accounts set current_balance = current_balance + :delta, updated_at = now() where id = :id",
+                {"delta": _to_float(payload.amount * _tx_sign(payload.direction)), "id": payload.accountId},
+            )
+            if first is None:
+                first = row
+        return first or {}
 
     def list_transactions(self, user_id: UUID) -> list[dict[str, Any]]:
         return self._run(
             """
-            select id, account_id, direction, amount, currency, transaction_at, category, note
+            select id, account_id, direction, amount, currency, transaction_at, category, note,
+                   transfer_group_id, recurring_group_id, recurring_frequency, recurring_index, recurring_day_of_month, recurring_weekend_policy
             from transactions
             where user_id = :user_id
             order by transaction_at desc
@@ -1384,7 +1682,7 @@ class PostgresPersistence(Persistence):
 
     def update_account(self, user_id: UUID, account_id: UUID, payload: AccountUpdate) -> dict[str, Any]:
         current = self._run(
-            "select id, name, account_type, currency, current_balance, created_at from accounts where id = :id and user_id = :user_id limit 1",
+            "select id, name, account_type, currency, initial_balance, initial_balance_at, current_balance, created_at from accounts where id = :id and user_id = :user_id limit 1",
             {"id": account_id, "user_id": user_id},
         )
         if not current:
@@ -1397,12 +1695,27 @@ class PostgresPersistence(Persistence):
             merged["account_type"] = updates["accountType"]
         if "currency" in updates:
             merged["currency"] = updates["currency"]
+        if "initialBalanceAt" in updates:
+            merged["initial_balance_at"] = updates["initialBalanceAt"]
+        if "initialBalance" in updates:
+            merged["initial_balance"] = _to_float(updates["initialBalance"])
+            tx_total_rows = self._run(
+                """
+                select coalesce(sum(case when direction = 'income' then amount else -amount end), 0) as signed_total
+                from transactions
+                where user_id = :user_id and account_id = :account_id
+                """,
+                {"user_id": user_id, "account_id": account_id},
+            )
+            signed_total = tx_total_rows[0]["signed_total"] if tx_total_rows else 0
+            merged["current_balance"] = Decimal(str(merged["initial_balance"])) + Decimal(str(signed_total))
         row = self._run(
             """
             update accounts
-            set name = :name, account_type = :account_type, currency = :currency, updated_at = now()
+            set name = :name, account_type = :account_type, currency = :currency,
+                initial_balance = :initial_balance, initial_balance_at = :initial_balance_at, current_balance = :current_balance, updated_at = now()
             where id = :id and user_id = :user_id
-            returning id, name, account_type, currency, current_balance, created_at
+            returning id, name, account_type, currency, initial_balance, initial_balance_at, current_balance, created_at
             """,
             {
                 "id": account_id,
@@ -1410,14 +1723,43 @@ class PostgresPersistence(Persistence):
                 "name": merged["name"],
                 "account_type": merged["account_type"],
                 "currency": merged["currency"],
+                "initial_balance": merged["initial_balance"],
+                "initial_balance_at": merged.get("initial_balance_at"),
+                "current_balance": merged["current_balance"],
             },
         )[0]
         return row
 
+    def delete_account(self, user_id: UUID, account_id: UUID, action: AccountDeleteAction, target_account_id: UUID | None = None) -> None:
+        source_rows = self._run(
+            "select id, current_balance from accounts where id = :id and user_id = :user_id limit 1",
+            {"id": account_id, "user_id": user_id},
+        )
+        if not source_rows:
+            raise HTTPException(status_code=404, detail=f"account not found: {account_id}")
+        if action == AccountDeleteAction.transfer_balance:
+            if target_account_id is None:
+                raise HTTPException(status_code=400, detail="targetAccountId is required for transfer_balance")
+            if target_account_id == account_id:
+                raise HTTPException(status_code=400, detail="targetAccountId must be different from account_id")
+            target = self._run(
+                "select id from accounts where id = :id and user_id = :user_id limit 1",
+                {"id": target_account_id, "user_id": user_id},
+            )
+            if not target:
+                raise HTTPException(status_code=404, detail=f"account not found: {target_account_id}")
+            self._run(
+                "update accounts set current_balance = current_balance + :delta, updated_at = now() where id = :id and user_id = :user_id",
+                {"delta": source_rows[0]["current_balance"], "id": target_account_id, "user_id": user_id},
+            )
+        self._run("delete from transactions where account_id = :account_id and user_id = :user_id", {"account_id": account_id, "user_id": user_id})
+        self._run("delete from accounts where id = :id and user_id = :user_id", {"id": account_id, "user_id": user_id})
+
     def update_transaction(self, user_id: UUID, transaction_id: UUID, payload: TransactionUpdate) -> dict[str, Any]:
         current = self._run(
             """
-            select id, account_id, direction, amount, currency, transaction_at, category, note
+            select id, account_id, direction, amount, currency, transaction_at, category, note,
+                   transfer_group_id, recurring_group_id, recurring_frequency, recurring_index, recurring_day_of_month, recurring_weekend_policy
             from transactions
             where id = :id and user_id = :user_id
             limit 1
@@ -1428,6 +1770,16 @@ class PostgresPersistence(Persistence):
             raise HTTPException(status_code=404, detail=f"transaction not found: {transaction_id}")
         merged = current[0].copy()
         updates = payload.model_dump(exclude_none=True)
+        original_account_id = row_account_id = merged["account_id"]
+        if "accountId" in updates:
+            target = self._run(
+                "select id from accounts where id = :id and user_id = :user_id limit 1",
+                {"id": updates["accountId"], "user_id": user_id},
+            )
+            if not target:
+                raise HTTPException(status_code=404, detail=f"account not found: {updates['accountId']}")
+            merged["account_id"] = updates["accountId"]
+            row_account_id = updates["accountId"]
         if "direction" in updates:
             merged["direction"] = updates["direction"]
         if "amount" in updates:
@@ -1440,16 +1792,20 @@ class PostgresPersistence(Persistence):
             merged["category"] = updates["category"]
         if "note" in updates:
             merged["note"] = updates["note"]
+        old_delta = Decimal(str(current[0]["amount"])) * _tx_sign(current[0]["direction"])
+        new_delta = Decimal(str(merged["amount"])) * _tx_sign(merged["direction"])
         row = self._run(
             """
             update transactions
-            set direction = :direction, amount = :amount, currency = :currency, transaction_at = :transaction_at, category = :category, note = :note, updated_at = now()
+            set account_id = :account_id, direction = :direction, amount = :amount, currency = :currency, transaction_at = :transaction_at, category = :category, note = :note, updated_at = now()
             where id = :id and user_id = :user_id
-            returning id, account_id, direction, amount, currency, transaction_at, category, note
+            returning id, account_id, direction, amount, currency, transaction_at, category, note,
+                      transfer_group_id, recurring_group_id, recurring_frequency, recurring_index, recurring_day_of_month, recurring_weekend_policy
             """,
             {
                 "id": transaction_id,
                 "user_id": user_id,
+                "account_id": row_account_id,
                 "direction": merged["direction"],
                 "amount": merged["amount"],
                 "currency": merged["currency"],
@@ -1458,7 +1814,172 @@ class PostgresPersistence(Persistence):
                 "note": merged.get("note"),
             },
         )[0]
+        if original_account_id != row["account_id"]:
+            self._run(
+                "update accounts set current_balance = current_balance - :delta, updated_at = now() where id = :id and user_id = :user_id",
+                {"delta": _to_float(old_delta), "id": original_account_id, "user_id": user_id},
+            )
+            self._run(
+                "update accounts set current_balance = current_balance + :delta, updated_at = now() where id = :id and user_id = :user_id",
+                {"delta": _to_float(new_delta), "id": row["account_id"], "user_id": user_id},
+            )
+            return row
+        self._run(
+            "update accounts set current_balance = current_balance + :delta, updated_at = now() where id = :id and user_id = :user_id",
+            {"delta": _to_float(new_delta - old_delta), "id": row["account_id"], "user_id": user_id},
+        )
         return row
+
+    def delete_transaction(self, user_id: UUID, transaction_id: UUID) -> None:
+        current = self._run(
+            "select id, account_id, direction, amount from transactions where id = :id and user_id = :user_id limit 1",
+            {"id": transaction_id, "user_id": user_id},
+        )
+        if not current:
+            raise HTTPException(status_code=404, detail=f"transaction not found: {transaction_id}")
+        row = current[0]
+        delta = Decimal(str(row["amount"])) * _tx_sign(row["direction"])
+        self._run("delete from transactions where id = :id and user_id = :user_id", {"id": transaction_id, "user_id": user_id})
+        self._run(
+            "update accounts set current_balance = current_balance - :delta, updated_at = now() where id = :id and user_id = :user_id",
+            {"delta": _to_float(delta), "id": row["account_id"], "user_id": user_id},
+        )
+
+    def transfer_between_accounts(self, user_id: UUID, payload: TransactionTransferCreate) -> dict[str, Any]:
+        self._ensure_auth_columns()
+        from_account = self._run(
+            "select id from accounts where id = :id and user_id = :user_id limit 1",
+            {"id": payload.fromAccountId, "user_id": user_id},
+        )
+        to_account = self._run(
+            "select id from accounts where id = :id and user_id = :user_id limit 1",
+            {"id": payload.toAccountId, "user_id": user_id},
+        )
+        if not from_account:
+            raise HTTPException(status_code=404, detail=f"account not found: {payload.fromAccountId}")
+        if not to_account:
+            raise HTTPException(status_code=404, detail=f"account not found: {payload.toAccountId}")
+        transfer_group_id = str(uuid4())
+        outgoing = self._run(
+            """
+            insert into transactions (
+              id, user_id, account_id, amount, currency, transaction_at, direction, category, note,
+              transfer_group_id, recurring_group_id, recurring_frequency, recurring_index, recurring_day_of_month, recurring_weekend_policy
+            )
+            values (
+              :id, :user_id, :account_id, :amount, :currency, :transaction_at, 'expense', :category, :note,
+              :transfer_group_id, null, null, null, null, null
+            )
+            returning id, account_id, direction, amount, currency, transaction_at, category, note,
+                      transfer_group_id, recurring_group_id, recurring_frequency, recurring_index, recurring_day_of_month, recurring_weekend_policy
+            """,
+            {
+                "id": str(uuid4()),
+                "user_id": user_id,
+                "account_id": payload.fromAccountId,
+                "amount": _to_float(payload.amount),
+                "currency": payload.currency,
+                "transaction_at": payload.occurredAt,
+                "category": payload.category,
+                "note": payload.note,
+                "transfer_group_id": transfer_group_id,
+            },
+        )[0]
+        incoming = self._run(
+            """
+            insert into transactions (
+              id, user_id, account_id, amount, currency, transaction_at, direction, category, note,
+              transfer_group_id, recurring_group_id, recurring_frequency, recurring_index, recurring_day_of_month, recurring_weekend_policy
+            )
+            values (
+              :id, :user_id, :account_id, :amount, :currency, :transaction_at, 'income', :category, :note,
+              :transfer_group_id, null, null, null, null, null
+            )
+            returning id, account_id, direction, amount, currency, transaction_at, category, note,
+                      transfer_group_id, recurring_group_id, recurring_frequency, recurring_index, recurring_day_of_month, recurring_weekend_policy
+            """,
+            {
+                "id": str(uuid4()),
+                "user_id": user_id,
+                "account_id": payload.toAccountId,
+                "amount": _to_float(payload.amount),
+                "currency": payload.currency,
+                "transaction_at": payload.occurredAt,
+                "category": payload.category,
+                "note": payload.note,
+                "transfer_group_id": transfer_group_id,
+            },
+        )[0]
+        self._run(
+            "update accounts set current_balance = current_balance - :delta, updated_at = now() where id = :id and user_id = :user_id",
+            {"delta": _to_float(payload.amount), "id": payload.fromAccountId, "user_id": user_id},
+        )
+        self._run(
+            "update accounts set current_balance = current_balance + :delta, updated_at = now() where id = :id and user_id = :user_id",
+            {"delta": _to_float(payload.amount), "id": payload.toAccountId, "user_id": user_id},
+        )
+        return {"transferGroupId": UUID(transfer_group_id), "outgoing": outgoing, "incoming": incoming}
+
+    def list_transaction_category_stats(self, user_id: UUID) -> TransactionCategoryStatsResponse:
+        rows = self._run(
+            """
+            select category, count(*)::integer as usage_count
+            from transactions
+            where user_id = :user_id and coalesce(trim(category), '') <> ''
+            group by category
+            order by usage_count desc, lower(category) asc
+            """,
+            {"user_id": user_id},
+        )
+        categories = [{"category": row["category"], "usageCount": row["usage_count"]} for row in rows]
+        most_used = categories[0]["category"] if categories else None
+        return TransactionCategoryStatsResponse(mostUsedCategory=most_used, categories=categories)
+
+    def rename_transaction_category(self, user_id: UUID, category: str, payload: TransactionCategoryRename) -> TransactionCategoryStatsResponse:
+        old_category = category.strip()
+        if not old_category:
+            raise HTTPException(status_code=400, detail="category must not be empty")
+        updated = self._run(
+            """
+            update transactions
+            set category = :new_category, updated_at = now()
+            where user_id = :user_id and category = :old_category
+            returning id
+            """,
+            {"new_category": payload.newCategory, "user_id": user_id, "old_category": old_category},
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"category not found: {category}")
+        return self.list_transaction_category_stats(user_id)
+
+    def delete_transaction_category(self, user_id: UUID, category: str, delete_transactions: bool) -> TransactionCategoryStatsResponse:
+        name = category.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="category must not be empty")
+        rows = self._run(
+            """
+            select id, account_id, direction, amount
+            from transactions
+            where user_id = :user_id and category = :category
+            """,
+            {"user_id": user_id, "category": name},
+        )
+        if not rows:
+            raise HTTPException(status_code=404, detail=f"category not found: {category}")
+        if delete_transactions:
+            for row in rows:
+                delta = Decimal(str(row["amount"])) * _tx_sign(row["direction"])
+                self._run(
+                    "update accounts set current_balance = current_balance - :delta, updated_at = now() where id = :id and user_id = :user_id",
+                    {"delta": _to_float(delta), "id": row["account_id"], "user_id": user_id},
+                )
+            self._run("delete from transactions where user_id = :user_id and category = :category", {"user_id": user_id, "category": name})
+        else:
+            self._run(
+                "update transactions set category = null, updated_at = now() where user_id = :user_id and category = :category",
+                {"user_id": user_id, "category": name},
+            )
+        return self.list_transaction_category_stats(user_id)
 
     def delete_user(self, user_id: UUID) -> None:
         self._ensure_auth_columns()

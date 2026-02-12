@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.responses import JSONResponse
 
 from .schemas import (
+    AccountDeleteAction,
     AppSettings,
     AppSettingsUpdate,
     ApiErrorDetail,
@@ -48,7 +49,11 @@ from .schemas import (
     PropertyResponse,
     RegisterRequest,
     TransactionCreate,
+    TransactionCategoryStatsResponse,
+    TransactionCategoryRename,
     TransactionUpdate,
+    TransactionTransferCreate,
+    TransactionTransferResponse,
     TransactionResponse,
     VehicleCreate,
     VehicleResponse,
@@ -315,6 +320,25 @@ def _require_user(authorization: str | None = None, session_token: str | None = 
     return user_id
 
 
+def _transaction_response_from_row(row: dict[str, Any]) -> TransactionResponse:
+    return TransactionResponse(
+        id=row["id"],
+        accountId=row["account_id"],
+        direction=row["direction"],
+        amount=row["amount"],
+        currency=row["currency"],
+        occurredAt=row["transaction_at"],
+        category=row.get("category"),
+        note=row.get("note"),
+        transferGroupId=row.get("transfer_group_id"),
+        recurringGroupId=row.get("recurring_group_id"),
+        recurringFrequency=row.get("recurring_frequency"),
+        recurringIndex=row.get("recurring_index"),
+        recurringDayOfMonth=row.get("recurring_day_of_month"),
+        recurringWeekendPolicy=row.get("recurring_weekend_policy"),
+    )
+
+
 @app.post("/api/v1/auth/register", response_model=AuthResponse, status_code=201)
 async def auth_register(payload: RegisterRequest, response: Response) -> AuthResponse:
     user = persistence.register_user(payload.email, payload.password, payload.fullName)
@@ -421,6 +445,8 @@ async def create_account(
         name=row["name"],
         accountType=row["account_type"],
         currency=row["currency"],
+        initialBalance=row.get("initial_balance", 0),
+        initialBalanceAt=row.get("initial_balance_at"),
         currentBalance=row["current_balance"],
         createdAt=row["created_at"],
     )
@@ -439,6 +465,8 @@ async def list_accounts(
             name=row["name"],
             accountType=row["account_type"],
             currency=row["currency"],
+            initialBalance=row.get("initial_balance", 0),
+            initialBalanceAt=row.get("initial_balance_at"),
             currentBalance=row["current_balance"],
             createdAt=row["created_at"],
         )
@@ -460,9 +488,24 @@ async def update_account(
         name=row["name"],
         accountType=row["account_type"],
         currency=row["currency"],
+        initialBalance=row.get("initial_balance", 0),
+        initialBalanceAt=row.get("initial_balance_at"),
         currentBalance=row["current_balance"],
         createdAt=row["created_at"],
     )
+
+
+@app.delete("/api/v1/accounts/{account_id}")
+async def delete_account(
+    account_id: UUID,
+    action: AccountDeleteAction,
+    targetAccountId: UUID | None = None,
+    authorization: str | None = Header(default=None),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> dict[str, bool]:
+    user_id = _require_user(authorization, session_token)
+    persistence.delete_account(user_id, account_id, action, targetAccountId)
+    return {"deleted": True}
 
 
 @app.post("/api/v1/transactions", response_model=TransactionResponse, status_code=201)
@@ -473,16 +516,7 @@ async def create_transaction(
 ) -> TransactionResponse:
     user_id = _require_user(authorization, session_token)
     row = persistence.create_transaction(user_id, payload)
-    return TransactionResponse(
-        id=row["id"],
-        accountId=row["account_id"],
-        direction=row["direction"],
-        amount=row["amount"],
-        currency=row["currency"],
-        occurredAt=row["transaction_at"],
-        category=row.get("category"),
-        note=row.get("note"),
-    )
+    return _transaction_response_from_row(row)
 
 
 @app.get("/api/v1/transactions", response_model=list[TransactionResponse])
@@ -492,19 +526,7 @@ async def list_transactions(
 ) -> list[TransactionResponse]:
     user_id = _require_user(authorization, session_token)
     rows = persistence.list_transactions(user_id)
-    return [
-        TransactionResponse(
-            id=row["id"],
-            accountId=row["account_id"],
-            direction=row["direction"],
-            amount=row["amount"],
-            currency=row["currency"],
-            occurredAt=row["transaction_at"],
-            category=row.get("category"),
-            note=row.get("note"),
-        )
-        for row in rows
-    ]
+    return [_transaction_response_from_row(row) for row in rows]
 
 
 @app.put("/api/v1/transactions/{transaction_id}", response_model=TransactionResponse)
@@ -516,16 +538,73 @@ async def update_transaction(
 ) -> TransactionResponse:
     user_id = _require_user(authorization, session_token)
     row = persistence.update_transaction(user_id, transaction_id, payload)
-    return TransactionResponse(
-        id=row["id"],
-        accountId=row["account_id"],
-        direction=row["direction"],
-        amount=row["amount"],
-        currency=row["currency"],
-        occurredAt=row["transaction_at"],
-        category=row.get("category"),
-        note=row.get("note"),
+    return _transaction_response_from_row(row)
+
+
+@app.delete("/api/v1/transactions/{transaction_id}")
+async def delete_transaction(
+    transaction_id: UUID,
+    authorization: str | None = Header(default=None),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> dict[str, bool]:
+    user_id = _require_user(authorization, session_token)
+    persistence.delete_transaction(user_id, transaction_id)
+    return {"deleted": True}
+
+
+@app.post("/api/v1/account-transfers", response_model=TransactionTransferResponse, status_code=201)
+async def transfer_transaction(
+    payload: TransactionTransferCreate,
+    authorization: str | None = Header(default=None),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> TransactionTransferResponse:
+    user_id = _require_user(authorization, session_token)
+    data = persistence.transfer_between_accounts(user_id, payload)
+    return TransactionTransferResponse(
+        transferGroupId=data["transferGroupId"],
+        outgoing=_transaction_response_from_row(data["outgoing"]),
+        incoming=_transaction_response_from_row(data["incoming"]),
     )
+
+
+@app.get("/api/v1/transactions/categories", response_model=TransactionCategoryStatsResponse)
+async def transaction_categories(
+    authorization: str | None = Header(default=None),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> TransactionCategoryStatsResponse:
+    user_id = _require_user(authorization, session_token)
+    return persistence.list_transaction_category_stats(user_id)
+
+
+@app.put("/api/v1/transactions/categories/{category}", response_model=TransactionCategoryStatsResponse)
+async def rename_transaction_category(
+    category: str,
+    payload: TransactionCategoryRename,
+    authorization: str | None = Header(default=None),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> TransactionCategoryStatsResponse:
+    user_id = _require_user(authorization, session_token)
+    return persistence.rename_transaction_category(user_id, category, payload)
+
+
+@app.delete("/api/v1/transactions/categories/{category}", response_model=TransactionCategoryStatsResponse)
+async def delete_transaction_category(
+    category: str,
+    deleteTransactions: bool = False,
+    authorization: str | None = Header(default=None),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> TransactionCategoryStatsResponse:
+    user_id = _require_user(authorization, session_token)
+    return persistence.delete_transaction_category(user_id, category, deleteTransactions)
+
+
+@app.post("/api/v1/auth/ping")
+async def auth_ping(
+    authorization: str | None = Header(default=None),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> dict[str, bool]:
+    _require_user(authorization, session_token)
+    return {"ok": True}
 
 
 @app.get("/api/v1/admin/backup/export")

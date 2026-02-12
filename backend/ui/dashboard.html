@@ -8,18 +8,20 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
-    :root { --bg:#eef3f9; --surface:#fff; --text:#10243d; --primary:#0f6ecf; --border:#d8e2f0; --shadow:0 8px 24px rgba(16,36,61,.08); --err:#b3261e; --ok:#1b8f47; }
-    body.dark { --bg:#0c1625; --surface:#13253a; --text:#e6f0ff; --primary:#5ea8ff; --border:#274565; --shadow:0 8px 24px rgba(0,0,0,.35); --err:#ff8a80; --ok:#6ed69b; }
+    :root { --bg:#eef3f9; --surface:#fff; --text:#10243d; --primary:#0f6ecf; --border:#d8e2f0; --shadow:0 8px 24px rgba(16,36,61,.08); --err:#b3261e; --ok:#1b8f47; --muted:#5a718e; }
+    body.dark { --bg:#0c1625; --surface:#13253a; --text:#e6f0ff; --primary:#5ea8ff; --border:#274565; --shadow:0 8px 24px rgba(0,0,0,.35); --err:#ff8a80; --ok:#6ed69b; --muted:#b4c8e0; }
     * { box-sizing: border-box; }
     body { margin: 0; padding: 24px; font-family: "Roboto", sans-serif; background: var(--bg); color: var(--text); }
-    .container { max-width: 1200px; margin: 0 auto; display: grid; gap: 16px; }
+    .container { max-width: 1240px; margin: 0 auto; display: grid; gap: 16px; }
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 20px; }
-    .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .topbar { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+    .top-left { display:grid; gap:4px; }
     .top-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .subtle-link { color: var(--muted); text-decoration: none; font-size: 13px; }
     .nav { color: var(--primary); text-decoration: none; font-weight: 500; }
     .user-menu { position:relative; }
     .menu-btn { width:auto; margin:0; background:transparent; border:1px solid var(--border); color:var(--text); }
-    .menu { position:absolute; right:0; top:42px; background:var(--surface); border:1px solid var(--border); border-radius:10px; min-width:180px; box-shadow:var(--shadow); display:none; z-index:20; }
+    .menu { position:absolute; right:0; top:42px; background:var(--surface); border:1px solid var(--border); border-radius:10px; min-width:200px; box-shadow:var(--shadow); display:none; z-index:20; }
     .menu.open { display:block; }
     .menu button { margin:0; border-radius:0; border:0; border-bottom:1px solid var(--border); background:transparent; color:var(--text); text-align:left; }
     .menu button:last-child { border-bottom:0; color:var(--err); }
@@ -31,6 +33,7 @@
     body.dark select option { background:#0f1f33; color:#f0f6ff; }
     button { background:var(--primary); color:#fff; border:0; font-weight:500; cursor:pointer; }
     button.secondary { background:transparent; border:1px solid var(--border); color:var(--text); }
+    button.danger { color:var(--err); border-color:var(--err); }
     .msg { font-size:14px; margin-top:8px; }
     .msg.ok { color:var(--ok); }
     .msg.err { color:var(--err); }
@@ -39,23 +42,37 @@
     th { font-size:13px; }
     td input, td select { margin:0; min-width:100px; padding:6px 8px; font-size:13px; }
     pre { background:#0d1b2f; color:#d7e8ff; padding:12px; border-radius:10px; overflow:auto; min-height:160px; }
-    #chartCanvas { width:100%; height:280px; border:1px solid var(--border); border-radius:12px; background:#fff; }
+    #chartCanvas { width:100%; height:300px; border:1px solid var(--border); border-radius:12px; background:#fff; }
     body.dark #chartCanvas { background:#0f1f33; }
+    .legend { display:flex; flex-wrap:wrap; gap:14px; margin:10px 0; font-size:13px; color:var(--muted); }
+    .legend-item { display:flex; align-items:center; gap:6px; }
+    .dot { width:12px; height:12px; border-radius:3px; display:inline-block; }
+    .dot.balance { background:#0f6ecf; }
+    .dot.income { background:#1b8f47; }
+    .dot.expense { background:#b3261e; }
     .inline { display:flex; gap:8px; }
+    .small { font-size:12px; color:var(--muted); }
+    .pill-list { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+    .pill { border:1px solid var(--border); border-radius:999px; padding:6px 10px; font-size:12px; }
+    .stack { display:grid; gap:8px; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="card">
       <div class="topbar">
-        <div><h1 id="title">Dashboard</h1><p id="subtitle">Accounts and transactions.</p></div>
+        <div class="top-left">
+          <h1 id="title">Dashboard</h1>
+          <p id="subtitle">Accounts and transactions.</p>
+          <a class="subtle-link" id="donateLink" href="https://buymeacoffee.com/marek9336y" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
+        </div>
         <div class="top-actions">
-          <a class="nav" id="donateLink" href="https://buymeacoffee.com/marek9336y" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
-          <a class="nav" href="/ui/dashboard" id="navDashboard">Dashboard</a>
-          <a class="nav" href="/ui/settings" id="navSettings">Settings</a>
           <div class="user-menu">
             <button class="menu-btn" id="userBtn" type="button">...</button>
-            <div class="menu" id="userMenu"><button id="logoutBtn" type="button">Logout</button></div>
+            <div class="menu" id="userMenu">
+              <button id="menuSettingsBtn" type="button">Settings</button>
+              <button id="logoutBtn" type="button">Logout</button>
+            </div>
           </div>
         </div>
       </div>
@@ -74,12 +91,16 @@
           <select id="chartPeriod">
             <option value="week">7 days</option>
             <option value="month">30 days</option>
+            <option value="quarter">90 days</option>
             <option value="year">365 days</option>
             <option value="all">All</option>
           </select>
         </div>
       </div>
-      <canvas id="chartCanvas" width="1120" height="280"></canvas>
+      <div class="legend" id="chartLegend"></div>
+      <canvas id="chartCanvas" width="1120" height="300"></canvas>
+      <div class="small" id="chartRange"></div>
+      <div class="pill-list" id="chartDetails"></div>
     </div>
 
     <div class="card grid">
@@ -97,6 +118,7 @@
         <input id="accTypeCustom" placeholder="Custom account type" style="display:none" />
         <input id="accCurrency" value="CZK" />
         <input id="accBalance" type="number" step="0.01" value="0" />
+        <input id="accInitialDate" type="date" />
         <button id="accBtn" type="button">Create Account</button>
       </div>
       <div class="box">
@@ -106,9 +128,39 @@
         <input id="txAmount" type="number" step="0.01" value="100" />
         <input id="txCurrency" value="CZK" />
         <input id="txDate" type="date" />
-        <input id="txCategory" placeholder="Category (optional)" />
+        <input id="txCategory" list="txCategoryList" placeholder="Category (optional)" />
+        <datalist id="txCategoryList"></datalist>
         <input id="txNote" placeholder="Note (optional)" />
+        <div class="inline">
+          <select id="txRecurringFrequency">
+            <option value="">no recurrence</option>
+            <option value="weekly">weekly</option>
+            <option value="monthly">monthly</option>
+            <option value="yearly">yearly</option>
+          </select>
+          <input id="txRecurringCount" type="number" min="1" max="365" value="1" />
+        </div>
+        <div class="inline">
+          <input id="txRecurringDayOfMonth" type="number" min="1" max="31" placeholder="day of month" />
+          <select id="txWeekendPolicy">
+            <option value="exact">exact day</option>
+            <option value="thursday">if weekend: Thursday</option>
+            <option value="friday">if weekend: Friday</option>
+            <option value="monday">if weekend: Monday</option>
+          </select>
+        </div>
         <button id="txBtn" type="button">Create Transaction</button>
+      </div>
+      <div class="box">
+        <h3 id="transferTitle">Transfer Between Accounts</h3>
+        <select id="transferFrom"></select>
+        <select id="transferTo"></select>
+        <input id="transferAmount" type="number" step="0.01" value="100" />
+        <input id="transferCurrency" value="CZK" />
+        <input id="transferDate" type="date" />
+        <input id="transferCategory" list="txCategoryList" placeholder="Category (optional)" />
+        <input id="transferNote" placeholder="Note (optional)" />
+        <button id="transferBtn" type="button">Transfer</button>
       </div>
     </div>
 
@@ -119,6 +171,8 @@
       <div style="overflow:auto"><table id="accountsTable"></table></div>
       <h3 id="transactionsHeading">Transactions</h3>
       <div style="overflow:auto"><table id="transactionsTable"></table></div>
+      <h3 id="categoriesHeading">Categories Summary</h3>
+      <div style="overflow:auto"><table id="categoriesTable"></table></div>
       <pre id="out" style="display:none">Loading...</pre>
     </div>
   </div>
@@ -126,25 +180,32 @@
   <script>
     const FALLBACK = {
       en: {
-        title:"Dashboard", subtitle:"Accounts and transactions.", dashboard:"Dashboard", settings:"Settings", donate:"Buy me a coffee", createAccount:"Create Account", createTx:"Create Transaction",
-        refresh:"Refresh Data", logout:"Logout", advanced:"Advanced JSON", accounts:"Accounts", transactions:"Transactions", accountCreated:"Account created.", txCreated:"Transaction created.",
+        title:"Dashboard", subtitle:"Accounts and transactions.", settings:"Settings", donate:"Buy me a coffee", createAccount:"Create Account", createTx:"Create Transaction", transferTitle:"Transfer Between Accounts",
+        refresh:"Refresh Data", logout:"Logout", advanced:"Advanced JSON", accounts:"Accounts", transactions:"Transactions", accountCreated:"Account created.", txCreated:"Transaction created.", transferCreated:"Transfer created.", txDeleted:"Transaction deleted.",
         createAccountFirst:"Create account first.", authReq:"Authentication required.", name:"Name", type:"Type", currency:"Currency", balance:"Balance", date:"Date", direction:"Direction",
-        amount:"Amount", category:"Category", note:"Note", actions:"Actions", phAccount:"Main account", phCategory:"Category (optional)", phNote:"Note (optional)", save:"Save", saved:"Saved.",
+        amount:"Amount", category:"Category", note:"Note", actions:"Actions", transfer:"Transfer", recurring:"Recurring", phAccount:"Main account", phCategory:"Category (optional)", phNote:"Note (optional)", save:"Save", del:"Delete", saved:"Saved.", account:"Account",
         checking:"Checking", cash:"Cash", savings:"Savings", crypto:"Crypto", stocks:"Stocks", custom:"Custom", income:"Income", expense:"Expense",
-        chartTitle:"Balance Trend", chartAccount:"Account", chartPeriod:"Period", periodWeek:"7 days", periodMonth:"30 days", periodYear:"365 days", periodAll:"All", allAccounts:"All accounts"
+        chartTitle:"Balance Trend", chartAccount:"Account", chartPeriod:"Period", periodWeek:"7 days", periodMonth:"30 days", periodQuarter:"90 days", periodYear:"365 days", periodAll:"All", allAccounts:"All accounts", noRecurrence:"No recurrence", weekly:"Weekly", monthly:"Monthly", yearly:"Yearly", noData:"No data for selected period",
+        categoriesHeading:"Categories Summary", renameCategory:"Rename", clearCategory:"Remove from transactions", deleteCategoryTx:"Delete category transactions",
+        editInitialBalance:"Edit initial balance/date", deleteAccount:"Delete account", deleteAccountTransfer:"Transfer balance", deleteAccountDeleteTx:"Delete transactions", chooseTargetAccount:"Select target account first",
+        recurringDayPlaceholder:"day of month", weekendExact:"exact day", weekendThursday:"if weekend: Thursday", weekendFriday:"if weekend: Friday", weekendMonday:"if weekend: Monday"
       },
       cs: {
-        title:"Přehled", subtitle:"Účty a transakce.", dashboard:"Přehled", settings:"Nastavení", donate:"Buy me a coffee", createAccount:"Vytvořit účet", createTx:"Vytvořit transakci",
-        refresh:"Obnovit data", logout:"Odhlásit", advanced:"Pokročilý JSON", accounts:"Účty", transactions:"Transakce", accountCreated:"Účet byl vytvořen.", txCreated:"Transakce byla vytvořena.",
+        title:"Přehled", subtitle:"Účty a transakce.", settings:"Nastavení", donate:"Buy me a coffee", createAccount:"Vytvořit účet", createTx:"Vytvořit transakci", transferTitle:"Převod mezi účty",
+        refresh:"Obnovit data", logout:"Odhlásit", advanced:"Pokročilý JSON", accounts:"Účty", transactions:"Transakce", accountCreated:"Účet byl vytvořen.", txCreated:"Transakce byla vytvořena.", transferCreated:"Převod byl vytvořen.", txDeleted:"Transakce byla smazána.",
         createAccountFirst:"Nejdříve vytvoř účet.", authReq:"Je vyžadováno přihlášení.", name:"Název", type:"Typ", currency:"Měna", balance:"Zůstatek", date:"Datum", direction:"Směr",
-        amount:"Částka", category:"Kategorie", note:"Poznámka", actions:"Akce", phAccount:"Hlavní účet", phCategory:"Kategorie (volitelné)", phNote:"Poznámka (volitelné)", save:"Uložit", saved:"Uloženo.",
+        amount:"Částka", category:"Kategorie", note:"Poznámka", actions:"Akce", transfer:"Převod", recurring:"Pravidelnost", phAccount:"Hlavní účet", phCategory:"Kategorie (volitelné)", phNote:"Poznámka (volitelné)", save:"Uložit", del:"Smazat", saved:"Uloženo.", account:"Účet",
         checking:"Běžný účet", cash:"Hotovost", savings:"Spoření", crypto:"Krypto", stocks:"Akcie", custom:"Vlastní", income:"Příjem", expense:"Výdaj",
-        chartTitle:"Vývoj zůstatku", chartAccount:"Účet", chartPeriod:"Období", periodWeek:"7 dní", periodMonth:"30 dní", periodYear:"365 dní", periodAll:"Vše", allAccounts:"Všechny účty"
+        chartTitle:"Vývoj zůstatku", chartAccount:"Účet", chartPeriod:"Období", periodWeek:"7 dní", periodMonth:"30 dní", periodQuarter:"90 dní", periodYear:"365 dní", periodAll:"Vše", allAccounts:"Všechny účty", noRecurrence:"Bez opakování", weekly:"Týdně", monthly:"Měsíčně", yearly:"Ročně", noData:"Pro vybrané období nejsou data",
+        categoriesHeading:"Souhrn kategorií", renameCategory:"Přejmenovat", clearCategory:"Odebrat z transakcí", deleteCategoryTx:"Smazat transakce kategorie",
+        editInitialBalance:"Upravit počáteční stav/datum", deleteAccount:"Smazat účet", deleteAccountTransfer:"Převést zůstatek", deleteAccountDeleteTx:"Smazat transakce", chooseTargetAccount:"Nejprve vyber cílový účet",
+        recurringDayPlaceholder:"den v měsíci", weekendExact:"přesné datum", weekendThursday:"když víkend: čtvrtek", weekendFriday:"když víkend: pátek", weekendMonday:"když víkend: pondělí"
       }
     };
     let M = {};
     let allAccounts = [];
     let allTransactions = [];
+    let categoryStats = { categories: [], mostUsedCategory: null };
     function lang(){ return localStorage.getItem("mf_lang") || "en"; }
     function t(k){ return M[k] || FALLBACK[lang()][k] || k; }
     async function loadLocaleMessages(locale){
@@ -164,22 +225,25 @@
     function mapError(msg){ const m=(msg||"").toLowerCase(); if(m.includes("authentication required")||m.includes("invalid or expired token")) return t("authReq"); return msg; }
     async function parseError(res){ try{ const d=await res.json(); if(d?.error?.details?.length) return d.error.details.map(x=>`${x.field}: ${x.message}`).join("; "); if(d?.detail) return mapError(d.detail);}catch(_){} return `HTTP ${res.status}`; }
     async function api(path, method="GET", body=null){ const r=await fetch(path,{method,headers:{"Content-Type":"application/json"},body:body?JSON.stringify(body):null,credentials:"include"}); if(!r.ok) throw new Error(await parseError(r)); return await r.json(); }
+
     function applyTexts(){
       document.documentElement.lang = lang();
       document.getElementById("title").textContent=t("title");
       document.getElementById("subtitle").textContent=t("subtitle");
       document.getElementById("donateLink").textContent=t("donate");
-      document.getElementById("navDashboard").textContent=t("dashboard");
-      document.getElementById("navSettings").textContent=t("settings");
+      document.getElementById("menuSettingsBtn").textContent=t("settings");
       document.getElementById("logoutBtn").textContent=t("logout");
       document.getElementById("createAccountTitle").textContent=t("createAccount");
       document.getElementById("createTxTitle").textContent=t("createTx");
+      document.getElementById("transferTitle").textContent=t("transferTitle");
       document.getElementById("refreshBtn").textContent=t("refresh");
       document.getElementById("toggleAdvancedBtn").textContent=t("advanced");
       document.getElementById("accountsHeading").textContent=t("accounts");
       document.getElementById("transactionsHeading").textContent=t("transactions");
+      document.getElementById("categoriesHeading").textContent=t("categoriesHeading");
       document.getElementById("accBtn").textContent=t("createAccount");
       document.getElementById("txBtn").textContent=t("createTx");
+      document.getElementById("transferBtn").textContent=t("transfer");
       document.getElementById("accName").placeholder=t("phAccount");
       document.getElementById("txCategory").placeholder=t("phCategory");
       document.getElementById("txNote").placeholder=t("phNote");
@@ -191,35 +255,87 @@
       const txDir=document.getElementById("txDirection");
       txDir.options[0].textContent=t("expense"); txDir.options[1].textContent=t("income");
       const period=document.getElementById("chartPeriod");
-      period.options[0].textContent=t("periodWeek"); period.options[1].textContent=t("periodMonth"); period.options[2].textContent=t("periodYear"); period.options[3].textContent=t("periodAll");
+      period.options[0].textContent=t("periodWeek"); period.options[1].textContent=t("periodMonth"); period.options[2].textContent=t("periodQuarter"); period.options[3].textContent=t("periodYear"); period.options[4].textContent=t("periodAll");
+      const recurring=document.getElementById("txRecurringFrequency");
+      recurring.options[0].textContent=t("noRecurrence"); recurring.options[1].textContent=t("weekly"); recurring.options[2].textContent=t("monthly"); recurring.options[3].textContent=t("yearly");
+      const weekendPolicy=document.getElementById("txWeekendPolicy");
+      weekendPolicy.options[0].textContent=t("weekendExact");
+      weekendPolicy.options[1].textContent=t("weekendThursday");
+      weekendPolicy.options[2].textContent=t("weekendFriday");
+      weekendPolicy.options[3].textContent=t("weekendMonday");
+      document.getElementById("txRecurringDayOfMonth").placeholder=t("recurringDayPlaceholder");
+      fillChartAccountSelect();
+      renderAccounts(allAccounts);
+      renderTransactions(allTransactions);
+      renderCategories();
+      drawChart();
     }
+
     async function loadUser(){ const me=await api("/api/v1/auth/me"); document.getElementById("userBtn").textContent=me.fullName?`${me.fullName} (${me.email})`:me.email; }
+
     function renderAccounts(accounts){
       const table=document.getElementById("accountsTable");
-      table.innerHTML=`<thead><tr><th>${t("name")}</th><th>${t("type")}</th><th>${t("currency")}</th><th>${t("balance")}</th></tr></thead><tbody></tbody>`;
+      table.innerHTML=`<thead><tr><th>${t("name")}</th><th>${t("type")}</th><th>${t("currency")}</th><th>${t("balance")}</th><th>${t("actions")}</th></tr></thead><tbody></tbody>`;
       const tb=table.querySelector("tbody");
-      accounts.forEach(a=>{ const tr=document.createElement("tr"); tr.innerHTML=`<td>${a.name}</td><td>${accountTypeLabel(a.accountType)}</td><td>${a.currency}</td><td>${a.currentBalance}</td>`; tb.appendChild(tr); });
+      accounts.forEach(a=>{
+        const tr=document.createElement("tr");
+        const initialDate=(a.initialBalanceAt||"").toString().slice(0,10);
+        tr.innerHTML=`<td><input data-account-field="name" data-id="${a.id}" value="${a.name}" /></td>
+          <td><input data-account-field="accountType" data-id="${a.id}" value="${a.accountType}" /></td>
+          <td><input data-account-field="currency" data-id="${a.id}" value="${a.currency}" /></td>
+          <td>${Number(a.currentBalance).toFixed(2)}</td>
+          <td class="stack">
+            <div class="inline">
+              <input data-account-field="initialBalance" data-id="${a.id}" type="number" step="0.01" value="${Number(a.initialBalance||0)}" />
+              <input data-account-field="initialBalanceAt" data-id="${a.id}" type="date" value="${initialDate}" />
+            </div>
+            <div class="inline">
+              <button class="save-account secondary" data-id="${a.id}" style="width:auto">${t("save")}</button>
+              <button class="delete-account secondary danger" data-id="${a.id}" style="width:auto">${t("deleteAccount")}</button>
+            </div>
+          </td>`;
+        tb.appendChild(tr);
+      });
     }
+
     function renderTransactions(transactions){
       const table=document.getElementById("transactionsTable");
-      table.innerHTML=`<thead><tr><th>${t("date")}</th><th>${t("direction")}</th><th>${t("amount")}</th><th>${t("currency")}</th><th>${t("category")}</th><th>${t("note")}</th><th>${t("actions")}</th></tr></thead><tbody></tbody>`;
+      table.innerHTML=`<thead><tr><th>${t("date")}</th><th>${t("account")}</th><th>${t("direction")}</th><th>${t("amount")}</th><th>${t("currency")}</th><th>${t("category")}</th><th>${t("note")}</th><th>${t("transfer")}</th><th>${t("recurring")}</th><th>${t("actions")}</th></tr></thead><tbody></tbody>`;
       const tb=table.querySelector("tbody");
+      const accountOptions = allAccounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join("");
       transactions.forEach(tx=>{
         const tr=document.createElement("tr");
         const txDate = new Date(tx.occurredAt);
         const dateVal = txDate.toISOString().slice(0,10);
+        const transferText = tx.transferGroupId ? "yes" : "-";
+        const recurringBits = [];
+        if(tx.recurringFrequency) recurringBits.push(`${tx.recurringFrequency} #${tx.recurringIndex || 1}`);
+        if(tx.recurringDayOfMonth) recurringBits.push(`day ${tx.recurringDayOfMonth}`);
+        if(tx.recurringWeekendPolicy && tx.recurringWeekendPolicy!=="exact") recurringBits.push(tx.recurringWeekendPolicy);
+        const recurringText = recurringBits.length ? recurringBits.join(" | ") : "-";
         tr.innerHTML = `
           <td><input data-field="occurredAt" data-id="${tx.id}" type="date" value="${dateVal}" /></td>
+          <td><select data-field="accountId" data-id="${tx.id}">${accountOptions}</select></td>
           <td><select data-field="direction" data-id="${tx.id}"><option value="expense"${tx.direction==="expense"?" selected":""}>${t("expense")}</option><option value="income"${tx.direction==="income"?" selected":""}>${t("income")}</option></select></td>
           <td><input data-field="amount" data-id="${tx.id}" type="number" step="0.01" value="${Number(tx.amount)}" /></td>
           <td><input data-field="currency" data-id="${tx.id}" value="${tx.currency}" /></td>
-          <td><input data-field="category" data-id="${tx.id}" value="${tx.category || ""}" /></td>
+          <td><input data-field="category" data-id="${tx.id}" value="${tx.category || ""}" list="txCategoryList" /></td>
           <td><input data-field="note" data-id="${tx.id}" value="${tx.note || ""}" /></td>
-          <td><button class="save-tx secondary" data-id="${tx.id}" style="width:auto">${t("save")}</button></td>
+          <td>${transferText}</td>
+          <td>${recurringText}</td>
+          <td>
+            <button class="save-tx secondary" data-id="${tx.id}" style="width:auto">${t("save")}</button>
+            <button class="delete-tx secondary danger" data-id="${tx.id}" style="width:auto">${t("del")}</button>
+          </td>
         `;
+        const accountSelect = tr.querySelector(`select[data-field="accountId"][data-id="${tx.id}"]`);
+        if(accountSelect){
+          accountSelect.value = tx.accountId;
+        }
         tb.appendChild(tr);
       });
     }
+
     function fillChartAccountSelect(){
       const sel=document.getElementById("chartAccount");
       const current = sel.value || "all";
@@ -228,84 +344,211 @@
       allAccounts.forEach(a=>{ const o=document.createElement("option"); o.value=a.id; o.textContent=a.name; sel.appendChild(o); });
       sel.value=[...sel.options].some(o=>o.value===current)?current:"all";
     }
+
+    function fillAccountSelects(){
+      const opts = allAccounts.map(a=>`<option value="${a.id}">${a.name} (${a.currentBalance} ${a.currency})</option>`).join("");
+      document.getElementById("txAccount").innerHTML = opts;
+      document.getElementById("transferFrom").innerHTML = opts;
+      document.getElementById("transferTo").innerHTML = opts;
+    }
+
+    function applyCategorySuggestions(){
+      const list=document.getElementById("txCategoryList");
+      list.innerHTML="";
+      (categoryStats.categories || []).forEach(c=>{
+        const o=document.createElement("option");
+        o.value=c.category;
+        list.appendChild(o);
+      });
+      const current=document.getElementById("txCategory").value.trim();
+      if(!current && categoryStats.mostUsedCategory){
+        document.getElementById("txCategory").value=categoryStats.mostUsedCategory;
+      }
+    }
+
+    function renderCategories(){
+      const table=document.getElementById("categoriesTable");
+      table.innerHTML=`<thead><tr><th>${t("category")}</th><th>${t("amount")}</th><th>${t("actions")}</th></tr></thead><tbody></tbody>`;
+      const tb=table.querySelector("tbody");
+      (categoryStats.categories || []).forEach(c=>{
+        const tr=document.createElement("tr");
+        tr.innerHTML = `
+          <td><input data-category-field="name" data-category="${c.category}" value="${c.category}" /></td>
+          <td>${c.usageCount}</td>
+          <td class="inline">
+            <button class="rename-category secondary" data-category="${c.category}" style="width:auto">${t("renameCategory")}</button>
+            <button class="clear-category secondary" data-category="${c.category}" style="width:auto">${t("clearCategory")}</button>
+            <button class="delete-category secondary danger" data-category="${c.category}" style="width:auto">${t("deleteCategoryTx")}</button>
+          </td>
+        `;
+        tb.appendChild(tr);
+      });
+    }
+
     function chartSeries(){
       const period=document.getElementById("chartPeriod").value;
       const accountId=document.getElementById("chartAccount").value;
-      let txs=[...allTransactions];
-      if(accountId && accountId!=="all") txs = txs.filter(x=>x.accountId===accountId);
-      const now=Date.now();
-      const limitDays = period==="week"?7:(period==="month"?30:(period==="year"?365:null));
-      if(limitDays) txs = txs.filter(x => (now - new Date(x.occurredAt).getTime()) <= (limitDays*86400000));
+      let txs=[...allTransactions].filter((x)=>!accountId || accountId==="all" || x.accountId===accountId);
       txs.sort((a,b)=>new Date(a.occurredAt)-new Date(b.occurredAt));
+      const now=Date.now();
+      const limitDays = period==="week"?7:(period==="month"?30:(period==="quarter"?90:(period==="year"?365:null)));
+      const periodStart = limitDays ? (now - limitDays*86400000) : null;
+      const selectedAccounts = allAccounts.filter((a)=>accountId==="all" || a.id===accountId);
+      const currentTotal = selectedAccounts.reduce((sum,a)=>sum + Number(a.currentBalance||0),0);
+      const totalTxImpact = txs.reduce((sum,tx)=>sum + (tx.direction==="income"?Number(tx.amount||0):-Number(tx.amount||0)),0);
+      const globalOpeningBalance = currentTotal - totalTxImpact;
+      let openingBalance = globalOpeningBalance;
+      if(periodStart){
+        const beforeStart = txs.filter((tx)=>new Date(tx.occurredAt).getTime() < periodStart);
+        openingBalance += beforeStart.reduce((sum,tx)=>sum + (tx.direction==="income"?Number(tx.amount||0):-Number(tx.amount||0)),0);
+      }
+      if(limitDays) txs = txs.filter(x => new Date(x.occurredAt).getTime() >= periodStart);
       const byDay = new Map();
       txs.forEach(tx => {
         const day = new Date(tx.occurredAt).toISOString().slice(0,10);
-        const delta = (tx.direction==="income"?1:-1)*Number(tx.amount||0);
-        byDay.set(day, (byDay.get(day)||0)+delta);
+        if(!byDay.has(day)) byDay.set(day,{income:0,expense:0});
+        const row=byDay.get(day);
+        const val=Number(tx.amount||0);
+        if(tx.direction==="income") row.income += val; else row.expense += val;
       });
       const labels=[...byDay.keys()];
-      let run=0;
-      const values=labels.map(k=>{ run+=byDay.get(k); return run; });
-      return { labels, values };
+      let running=openingBalance;
+      const balance=[];
+      const income=[];
+      const expense=[];
+      if(!labels.length && selectedAccounts.length){
+        const today = new Date().toISOString().slice(0,10);
+        return { labels:[today], balance:[currentTotal], income:[0], expense:[0], txs };
+      }
+      labels.forEach(k=>{
+        const row=byDay.get(k);
+        income.push(row.income);
+        expense.push(row.expense);
+        running += row.income - row.expense;
+        balance.push(running);
+      });
+      return { labels, balance, income, expense, txs };
     }
+
     function drawChart(){
       const canvas=document.getElementById("chartCanvas");
       const ctx=canvas.getContext("2d");
       ctx.clearRect(0,0,canvas.width,canvas.height);
-      const { labels, values } = chartSeries();
-      const pad=36;
+      const { labels, balance, income, expense, txs } = chartSeries();
+      const pad=44;
       const w=canvas.width-pad*2;
       const h=canvas.height-pad*2;
       ctx.strokeStyle = "#8ea9c7";
       ctx.beginPath(); ctx.moveTo(pad,pad); ctx.lineTo(pad,pad+h); ctx.lineTo(pad+w,pad+h); ctx.stroke();
-      if(!values.length){
+      if(!labels.length){
         ctx.fillStyle="#7089a7";
         ctx.font="13px Roboto";
-        ctx.fillText("No data for selected period", pad+8, pad+20);
+        ctx.fillText(t("noData"), pad+8, pad+20);
+        document.getElementById("chartLegend").innerHTML="";
+        document.getElementById("chartRange").textContent="";
+        document.getElementById("chartDetails").innerHTML="";
         return;
       }
-      const min=Math.min(...values), max=Math.max(...values);
+      const values=[...balance, ...income, ...expense.map(v=>-v)];
+      const min=Math.min(...values, 0), max=Math.max(...values, 0);
       const yScale=(v)=> pad + (max===min ? h/2 : h - ((v-min)/(max-min))*h);
-      const xScale=(i)=> pad + (values.length===1 ? w/2 : (i/(values.length-1))*w);
-      ctx.strokeStyle="#0f6ecf";
-      ctx.lineWidth=2;
+      const xScale=(i)=> pad + (labels.length===1 ? w/2 : (i/(labels.length-1))*w);
+      ctx.strokeStyle="#1b8f47";
+      ctx.lineWidth=1.5;
       ctx.beginPath();
-      values.forEach((v,i)=>{ const x=xScale(i), y=yScale(v); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+      income.forEach((v,i)=>{ const x=xScale(i), y=yScale(v); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+      ctx.stroke();
+      ctx.strokeStyle="#b3261e";
+      ctx.beginPath();
+      expense.forEach((v,i)=>{ const x=xScale(i), y=yScale(-v); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+      ctx.stroke();
+      ctx.strokeStyle="#0f6ecf";
+      ctx.lineWidth=2.4;
+      ctx.beginPath();
+      balance.forEach((v,i)=>{ const x=xScale(i), y=yScale(v); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
       ctx.stroke();
       ctx.fillStyle="#0f6ecf";
-      values.forEach((v,i)=>{ const x=xScale(i), y=yScale(v); ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill(); });
-      ctx.fillStyle="#274565";
-      ctx.font="12px Roboto";
-      ctx.fillText(`${labels[0]} -> ${labels[labels.length-1]}`, pad, canvas.height-10);
+      balance.forEach((v,i)=>{ const x=xScale(i), y=yScale(v); ctx.beginPath(); ctx.arc(x,y,2.8,0,Math.PI*2); ctx.fill(); });
+
+      const totalIncome = income.reduce((a,b)=>a+b,0).toFixed(2);
+      const totalExpense = expense.reduce((a,b)=>a+b,0).toFixed(2);
+      const endBalance = balance[balance.length-1].toFixed(2);
+      document.getElementById("chartLegend").innerHTML = `
+        <span class="legend-item"><span class="dot balance"></span>${t("balance")}: ${endBalance}</span>
+        <span class="legend-item"><span class="dot income"></span>${t("income")}: ${totalIncome}</span>
+        <span class="legend-item"><span class="dot expense"></span>${t("expense")}: ${totalExpense}</span>
+      `;
+      document.getElementById("chartRange").textContent = `${labels[0]} -> ${labels[labels.length-1]}`;
+      const accountById = Object.fromEntries(allAccounts.map((a)=>[a.id,a]));
+      document.getElementById("chartDetails").innerHTML = txs.slice(-12).reverse().map((tx)=>{
+        const sign = tx.direction === "income" ? "+" : "-";
+        const accountName = accountById[tx.accountId]?.name || tx.accountId;
+        const dt = new Date(tx.occurredAt).toISOString().slice(0,10);
+        return `<span class="pill">${dt} | ${accountName} | ${sign}${Number(tx.amount).toFixed(2)} ${tx.currency}</span>`;
+      }).join("");
     }
+
     async function refreshAll(){
-      const [accounts, transactions] = await Promise.all([api("/api/v1/accounts"), api("/api/v1/transactions")]);
+      const [accounts, transactions, categories] = await Promise.all([
+        api("/api/v1/accounts"),
+        api("/api/v1/transactions"),
+        api("/api/v1/transactions/categories")
+      ]);
       allAccounts = accounts;
       allTransactions = transactions;
-      const txAccount=document.getElementById("txAccount");
-      txAccount.innerHTML="";
-      accounts.forEach(a=>{ const o=document.createElement("option"); o.value=a.id; o.textContent=`${a.name} (${a.currentBalance} ${a.currency})`; txAccount.appendChild(o); });
+      categoryStats = categories || { categories: [], mostUsedCategory: null };
+      fillAccountSelects();
       renderAccounts(accounts);
       renderTransactions(transactions);
       fillChartAccountSelect();
+      applyCategorySuggestions();
+      renderCategories();
       drawChart();
-      document.getElementById("out").textContent = JSON.stringify({ accounts, transactions }, null, 2);
+      document.getElementById("out").textContent = JSON.stringify({ accounts, transactions, categories }, null, 2);
     }
+
     async function createAccount(){
       const type = document.getElementById("accType").value === "custom" ? (document.getElementById("accTypeCustom").value.trim() || "custom") : document.getElementById("accType").value;
-      await api("/api/v1/accounts","POST",{ name:document.getElementById("accName").value, accountType:type, currency:document.getElementById("accCurrency").value, initialBalance:Number(document.getElementById("accBalance").value||0) });
+      const initialDate = document.getElementById("accInitialDate").value;
+      await api("/api/v1/accounts","POST",{ name:document.getElementById("accName").value, accountType:type, currency:document.getElementById("accCurrency").value, initialBalance:Number(document.getElementById("accBalance").value||0), initialBalanceAt: initialDate ? new Date(`${initialDate}T12:00:00`).toISOString() : null });
       setMsg(t("accountCreated"));
       await refreshAll();
     }
+
     async function createTx(){
       const accountId=document.getElementById("txAccount").value;
       if(!accountId) throw new Error(t("createAccountFirst"));
       const selectedDate = document.getElementById("txDate").value;
       const occurredAt = selectedDate ? new Date(`${selectedDate}T12:00:00`).toISOString() : new Date().toISOString();
-      await api("/api/v1/transactions","POST",{ accountId, direction:document.getElementById("txDirection").value, amount:Number(document.getElementById("txAmount").value||0), currency:document.getElementById("txCurrency").value, occurredAt, category:document.getElementById("txCategory").value||null, note:document.getElementById("txNote").value||null });
+      const recurringFrequency = document.getElementById("txRecurringFrequency").value || null;
+      const recurringCount = Number(document.getElementById("txRecurringCount").value||1);
+      const recurringDayRaw = document.getElementById("txRecurringDayOfMonth").value;
+      const recurringDayOfMonth = recurringDayRaw ? Number(recurringDayRaw) : null;
+      const recurringWeekendPolicy = document.getElementById("txWeekendPolicy").value || "exact";
+      await api("/api/v1/transactions","POST",{ accountId, direction:document.getElementById("txDirection").value, amount:Number(document.getElementById("txAmount").value||0), currency:document.getElementById("txCurrency").value, occurredAt, category:document.getElementById("txCategory").value||null, note:document.getElementById("txNote").value||null, recurringFrequency, recurringCount, recurringDayOfMonth, recurringWeekendPolicy });
       setMsg(t("txCreated"));
       await refreshAll();
     }
+
+    async function createTransfer(){
+      const fromAccountId=document.getElementById("transferFrom").value;
+      const toAccountId=document.getElementById("transferTo").value;
+      if(!fromAccountId||!toAccountId) throw new Error(t("createAccountFirst"));
+      const selectedDate = document.getElementById("transferDate").value;
+      const occurredAt = selectedDate ? new Date(`${selectedDate}T12:00:00`).toISOString() : new Date().toISOString();
+      await api("/api/v1/account-transfers","POST",{
+        fromAccountId,
+        toAccountId,
+        amount:Number(document.getElementById("transferAmount").value||0),
+        currency:document.getElementById("transferCurrency").value,
+        occurredAt,
+        category:document.getElementById("transferCategory").value||null,
+        note:document.getElementById("transferNote").value||null
+      });
+      setMsg(t("transferCreated"));
+      await refreshAll();
+    }
+
     async function saveTxRow(id){
       const row = [...document.querySelectorAll(`[data-id="${id}"]`)];
       const payload = {};
@@ -321,22 +564,122 @@
       setMsg(t("saved"));
       await refreshAll();
     }
+
+    async function saveAccountRow(id){
+      const row = [...document.querySelectorAll(`[data-account-field][data-id="${id}"]`)];
+      const payload = {};
+      row.forEach((el)=>{
+        const field = el.getAttribute("data-account-field");
+        if(!field) return;
+        if(field==="initialBalance") payload.initialBalance = Number(el.value || 0);
+        else if(field==="initialBalanceAt") payload.initialBalanceAt = el.value ? new Date(`${el.value}T12:00:00`).toISOString() : null;
+        else payload[field] = el.value;
+      });
+      await api(`/api/v1/accounts/${id}`,"PUT",payload);
+      setMsg(t("saved"));
+      await refreshAll();
+    }
+
+    async function deleteAccountRow(id){
+      const choice = prompt(`1 = ${t("deleteAccountTransfer")} | 2 = ${t("deleteAccountDeleteTx")}`, "1");
+      const mode = choice === "2" ? "delete_transactions" : "transfer_balance";
+      let targetId = null;
+      if(mode === "transfer_balance"){
+        const available = allAccounts.filter((a)=>a.id !== id);
+        if(!available.length){
+          throw new Error(t("createAccountFirst"));
+        }
+        const options = available.map((a, idx)=>`${idx + 1}: ${a.name}`).join("\n");
+        const idxRaw = prompt(`${t("chooseTargetAccount")}:\n${options}`, "1");
+        const idx = Number(idxRaw || 0) - 1;
+        targetId = available[idx]?.id;
+        if(!targetId) throw new Error(t("chooseTargetAccount"));
+      }
+      const query = new URLSearchParams({ action: mode });
+      if(targetId) query.set("targetAccountId", targetId);
+      const res = await fetch(`/api/v1/accounts/${id}?${query.toString()}`, { method:"DELETE", credentials:"include" });
+      if(!res.ok) throw new Error(await parseError(res));
+      setMsg(t("saved"));
+      await refreshAll();
+    }
+
+    async function renameCategory(oldName){
+      const input = [...document.querySelectorAll(`input[data-category-field="name"]`)].find((el)=>el.dataset.category===oldName);
+      const newName = (input?.value || "").trim();
+      if(!newName || newName===oldName) return;
+      await api(`/api/v1/transactions/categories/${encodeURIComponent(oldName)}`,"PUT",{ newCategory: newName });
+      setMsg(t("saved"));
+      await refreshAll();
+    }
+
+    async function clearCategory(name){
+      const res = await fetch(`/api/v1/transactions/categories/${encodeURIComponent(name)}?deleteTransactions=false`, { method:"DELETE", credentials:"include" });
+      if(!res.ok) throw new Error(await parseError(res));
+      setMsg(t("saved"));
+      await refreshAll();
+    }
+
+    async function deleteCategoryWithTransactions(name){
+      const res = await fetch(`/api/v1/transactions/categories/${encodeURIComponent(name)}?deleteTransactions=true`, { method:"DELETE", credentials:"include" });
+      if(!res.ok) throw new Error(await parseError(res));
+      setMsg(t("saved"));
+      await refreshAll();
+    }
+
+    async function deleteTxRow(id){
+      await fetch(`/api/v1/transactions/${id}`, { method:"DELETE", credentials:"include" }).then(async(r)=>{ if(!r.ok) throw new Error(await parseError(r)); });
+      setMsg(t("txDeleted"));
+      await refreshAll();
+    }
+
     async function logout(){ await api("/api/v1/auth/logout","POST"); window.location.href="/ui/get-started"; }
     async function safe(fn){ try{ await fn(); }catch(e){ setMsg(mapError(e.message), true); } }
 
     document.getElementById("txDate").value = new Date().toISOString().slice(0,10);
+    document.getElementById("accInitialDate").value = new Date().toISOString().slice(0,10);
+    document.getElementById("transferDate").value = new Date().toISOString().slice(0,10);
     const menu=document.getElementById("userMenu");
     document.getElementById("userBtn").addEventListener("click",()=>menu.classList.toggle("open"));
     document.addEventListener("click",(e)=>{ if(!e.target.closest(".user-menu")) menu.classList.remove("open"); });
+    document.getElementById("menuSettingsBtn").addEventListener("click",()=>{ window.location.href="/ui/settings"; });
     document.getElementById("logoutBtn").addEventListener("click",()=>safe(logout));
     document.getElementById("accBtn").addEventListener("click",()=>safe(createAccount));
     document.getElementById("txBtn").addEventListener("click",()=>safe(createTx));
+    document.getElementById("transferBtn").addEventListener("click",()=>safe(createTransfer));
     document.getElementById("refreshBtn").addEventListener("click",()=>safe(refreshAll));
     document.getElementById("toggleAdvancedBtn").addEventListener("click",()=>{ const p=document.getElementById("out"); p.style.display=p.style.display==="none"?"block":"none"; });
     document.getElementById("accType").addEventListener("change",(e)=>{ document.getElementById("accTypeCustom").style.display = e.target.value==="custom" ? "block" : "none"; });
-    document.getElementById("transactionsTable").addEventListener("click",(e)=>{ const b=e.target.closest(".save-tx"); if(b) safe(()=>saveTxRow(b.dataset.id)); });
+    document.getElementById("transactionsTable").addEventListener("click",(e)=>{
+      const saveBtn=e.target.closest(".save-tx");
+      if(saveBtn) return safe(()=>saveTxRow(saveBtn.dataset.id));
+      const deleteBtn=e.target.closest(".delete-tx");
+      if(deleteBtn) return safe(()=>deleteTxRow(deleteBtn.dataset.id));
+    });
+    document.getElementById("accountsTable").addEventListener("click",(e)=>{
+      const saveBtn=e.target.closest(".save-account");
+      if(saveBtn) return safe(()=>saveAccountRow(saveBtn.dataset.id));
+      const deleteBtn=e.target.closest(".delete-account");
+      if(deleteBtn) return safe(()=>deleteAccountRow(deleteBtn.dataset.id));
+    });
+    document.getElementById("categoriesTable").addEventListener("click",(e)=>{
+      const renameBtn=e.target.closest(".rename-category");
+      if(renameBtn) return safe(()=>renameCategory(renameBtn.dataset.category));
+      const clearBtn=e.target.closest(".clear-category");
+      if(clearBtn) return safe(()=>clearCategory(clearBtn.dataset.category));
+      const deleteBtn=e.target.closest(".delete-category");
+      if(deleteBtn) return safe(()=>deleteCategoryWithTransactions(deleteBtn.dataset.category));
+    });
     document.getElementById("chartPeriod").addEventListener("change",drawChart);
     document.getElementById("chartAccount").addEventListener("change",drawChart);
+
+    let lastActivityPingAt = 0;
+    async function pingActivity(){
+      const now = Date.now();
+      if(now - lastActivityPingAt < 60000) return;
+      lastActivityPingAt = now;
+      try{ await api("/api/v1/auth/ping","POST"); }catch(_){}
+    }
+    ["mousemove","keydown","click","scroll","touchstart"].forEach((evt)=>window.addEventListener(evt, pingActivity, { passive: true }));
 
     (async()=>{
       applyTheme();
