@@ -37,19 +37,19 @@ def _to_float(value: Decimal | None) -> float | None:
 
 
 class Persistence:
-    def get_app_settings(self) -> AppSettings:
+    def get_app_settings(self, user_id: UUID) -> AppSettings:
         raise NotImplementedError
 
-    def update_app_settings(self, payload: AppSettingsUpdate) -> AppSettings:
+    def update_app_settings(self, user_id: UUID, payload: AppSettingsUpdate) -> AppSettings:
         raise NotImplementedError
 
-    def export_backup(self) -> dict[str, Any]:
+    def export_backup(self, user_id: UUID) -> dict[str, Any]:
         raise NotImplementedError
 
-    def import_backup(self, payload: dict[str, Any]) -> dict[str, int]:
+    def import_backup(self, user_id: UUID, payload: dict[str, Any]) -> dict[str, int]:
         raise NotImplementedError
 
-    def mark_auto_backup_run(self, when: datetime) -> None:
+    def mark_auto_backup_run(self, user_id: UUID, when: datetime) -> None:
         raise NotImplementedError
 
     def register_user(self, email: str, password: str, full_name: str | None) -> dict[str, Any]:
@@ -59,6 +59,24 @@ class Persistence:
         raise NotImplementedError
 
     def get_user_by_id(self, user_id: UUID) -> dict[str, Any] | None:
+        raise NotImplementedError
+
+    def update_user_profile(self, user_id: UUID, email: str | None, full_name: str | None) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def change_user_password(self, user_id: UUID, current_password: str, new_password: str) -> None:
+        raise NotImplementedError
+
+    def list_locales(self, user_id: UUID) -> list[str]:
+        raise NotImplementedError
+
+    def get_locale_bundle(self, user_id: UUID, locale: str) -> dict[str, str]:
+        raise NotImplementedError
+
+    def get_custom_locale(self, user_id: UUID, locale: str) -> dict[str, str]:
+        raise NotImplementedError
+
+    def upsert_custom_locale(self, user_id: UUID, locale: str, payload: dict[str, str]) -> dict[str, str]:
         raise NotImplementedError
 
     def create_account(self, user_id: UUID, payload: AccountCreate) -> dict[str, Any]:
@@ -84,27 +102,27 @@ class Persistence:
 
 
 class InMemoryPersistence(Persistence):
-    def get_app_settings(self) -> AppSettings:
+    def get_app_settings(self, user_id: UUID) -> AppSettings:
         return AppSettings(**store.settings)
 
-    def update_app_settings(self, payload: AppSettingsUpdate) -> AppSettings:
+    def update_app_settings(self, user_id: UUID, payload: AppSettingsUpdate) -> AppSettings:
         store.settings.update(payload.model_dump(exclude_unset=True))
         return AppSettings(**store.settings)
 
-    def list_locales(self) -> list[str]:
+    def list_locales(self, user_id: UUID) -> list[str]:
         return sorted(set(store.base_locales.keys()) | set(store.custom_locales.keys()))
 
-    def get_locale_bundle(self, locale: str) -> dict[str, str]:
+    def get_locale_bundle(self, user_id: UUID, locale: str) -> dict[str, str]:
         return {**store.base_locales.get(locale, {}), **store.custom_locales.get(locale, {})}
 
-    def get_custom_locale(self, locale: str) -> dict[str, str]:
+    def get_custom_locale(self, user_id: UUID, locale: str) -> dict[str, str]:
         return store.custom_locales.get(locale, {})
 
-    def upsert_custom_locale(self, locale: str, payload: dict[str, str]) -> dict[str, str]:
+    def upsert_custom_locale(self, user_id: UUID, locale: str, payload: dict[str, str]) -> dict[str, str]:
         if locale not in store.custom_locales:
             store.custom_locales[locale] = {}
         store.custom_locales[locale].update(payload)
-        return self.get_locale_bundle(locale)
+        return self.get_locale_bundle(user_id, locale)
 
     def create_vehicle(self, payload: VehicleCreate) -> dict[str, Any]:
         entity_id = uuid4()
@@ -263,7 +281,12 @@ class InMemoryPersistence(Persistence):
             "calendarEvents": len(store.calendar_events),
         }
 
-    def export_backup(self) -> dict[str, Any]:
+    def export_backup(self, user_id: UUID) -> dict[str, Any]:
+        vehicle_ids = {k for k, v in store.vehicles.items() if v.get("user_id") == user_id}
+        property_ids = {k for k, v in store.properties.items() if v.get("user_id") == user_id}
+        insurance_ids = {k for k, v in store.insurances.items() if v.get("user_id") == user_id}
+        integration_ids = {k for k, v in store.calendar_integrations.items() if v.get("user_id") == user_id}
+        rule_ids = {k for k, v in store.notification_rules.items() if v.get("user_id") == user_id}
         return {
             "meta": {
                 "version": 1,
@@ -273,25 +296,25 @@ class InMemoryPersistence(Persistence):
             "data": {
                 "appSettings": store.settings,
                 "customLocales": store.custom_locales,
-                "users": list(store.users.values()),
-                "userCredentials": [{"user_id": user_id, "password_hash": pwd_hash} for user_id, pwd_hash in store.user_credentials.items()],
-                "accounts": list(store.accounts.values()),
-                "transactions": list(store.transactions.values()),
-                "vehicles": list(store.vehicles.values()),
-                "vehicleServices": list(store.vehicle_services.values()),
-                "vehicleServiceRules": list(store.vehicle_service_rules.values()),
-                "properties": list(store.properties.values()),
-                "propertyCosts": list(store.property_costs.values()),
-                "insurances": list(store.insurances.values()),
-                "insurancePremiums": list(store.insurance_premiums.values()),
-                "calendarIntegrations": list(store.calendar_integrations.values()),
-                "notificationRules": list(store.notification_rules.values()),
-                "notificationDeliveries": list(store.notification_deliveries.values()),
-                "calendarEvents": list(store.calendar_events.values()),
+                "users": [u for u in store.users.values() if u.get("id") == user_id],
+                "userCredentials": [{"user_id": uid, "password_hash": pwd_hash} for uid, pwd_hash in store.user_credentials.items() if uid == user_id],
+                "accounts": [a for a in store.accounts.values() if a.get("user_id") == user_id],
+                "transactions": [t for t in store.transactions.values() if t.get("user_id") == user_id],
+                "vehicles": [v for v in store.vehicles.values() if v.get("user_id") == user_id],
+                "vehicleServices": [vs for vs in store.vehicle_services.values() if vs.get("vehicle_id") in vehicle_ids],
+                "vehicleServiceRules": [vr for vr in store.vehicle_service_rules.values() if vr.get("vehicle_id") in vehicle_ids],
+                "properties": [p for p in store.properties.values() if p.get("user_id") == user_id],
+                "propertyCosts": [pc for pc in store.property_costs.values() if pc.get("property_id") in property_ids],
+                "insurances": [i for i in store.insurances.values() if i.get("user_id") == user_id],
+                "insurancePremiums": [ip for ip in store.insurance_premiums.values() if ip.get("insurance_id") in insurance_ids],
+                "calendarIntegrations": [ci for ci in store.calendar_integrations.values() if ci.get("user_id") == user_id],
+                "notificationRules": [nr for nr in store.notification_rules.values() if nr.get("user_id") == user_id],
+                "notificationDeliveries": [nd for nd in store.notification_deliveries.values() if nd.get("notification_rule_id") in rule_ids],
+                "calendarEvents": [ce for ce in store.calendar_events.values() if ce.get("calendar_integration_id") in integration_ids],
             },
         }
 
-    def import_backup(self, payload: dict[str, Any]) -> dict[str, int]:
+    def import_backup(self, user_id: UUID, payload: dict[str, Any]) -> dict[str, int]:
         data = payload.get("data", {})
         store.settings = data.get("appSettings", store.settings)
         store.custom_locales = data.get("customLocales", {})
@@ -334,7 +357,7 @@ class InMemoryPersistence(Persistence):
 
         return self.debug_counts()
 
-    def mark_auto_backup_run(self, when: datetime) -> None:
+    def mark_auto_backup_run(self, user_id: UUID, when: datetime) -> None:
         store.settings["autoBackupLastRunAt"] = when
 
     def register_user(self, email: str, password: str, full_name: str | None) -> dict[str, Any]:
@@ -358,6 +381,29 @@ class InMemoryPersistence(Persistence):
 
     def get_user_by_id(self, user_id: UUID) -> dict[str, Any] | None:
         return store.users.get(user_id)
+
+    def update_user_profile(self, user_id: UUID, email: str | None, full_name: str | None) -> dict[str, Any]:
+        row = store.users.get(user_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="user not found")
+        if email is not None:
+            for uid, user_row in store.users.items():
+                if uid != user_id and user_row.get("email", "").lower() == email.lower():
+                    raise HTTPException(status_code=409, detail="email already registered")
+            row["email"] = email
+        if full_name is not None:
+            row["full_name"] = full_name
+        store.users[user_id] = row
+        return row
+
+    def change_user_password(self, user_id: UUID, current_password: str, new_password: str) -> None:
+        row = store.users.get(user_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="user not found")
+        current_hash = store.user_credentials.get(user_id)
+        if not current_hash or not verify_password(current_password, current_hash):
+            raise HTTPException(status_code=401, detail="invalid current password")
+        store.user_credentials[user_id] = hash_password(new_password)
 
     def create_account(self, user_id: UUID, payload: AccountCreate) -> dict[str, Any]:
         entity_id = uuid4()
@@ -427,6 +473,8 @@ class InMemoryPersistence(Persistence):
             row["amount"] = updates["amount"]
         if "currency" in updates:
             row["currency"] = updates["currency"]
+        if "occurredAt" in updates:
+            row["transaction_at"] = updates["occurredAt"]
         if "category" in updates:
             row["category"] = updates["category"]
         if "note" in updates:
@@ -530,7 +578,7 @@ class PostgresPersistence(Persistence):
             """
         )
 
-    def get_app_settings(self) -> AppSettings:
+    def get_app_settings(self, user_id: UUID) -> AppSettings:
         self._ensure_app_settings_columns()
         rows = self._run(
             """
@@ -540,7 +588,7 @@ class PostgresPersistence(Persistence):
             from app_settings
             where user_id = :user_id
             """,
-            {"user_id": self.default_user_id},
+            {"user_id": user_id},
         )
         if not rows:
             self._run(
@@ -552,7 +600,7 @@ class PostgresPersistence(Persistence):
                 )
                 values (:id, :user_id, 'Europe/Prague', 'google', true, true, false, 'en', false, 1440, 30, null, null)
                 """,
-                {"id": str(uuid4()), "user_id": self.default_user_id},
+                {"id": str(uuid4()), "user_id": user_id},
             )
             rows = self._run(
                 """
@@ -561,7 +609,7 @@ class PostgresPersistence(Persistence):
                        session_timeout_minutes
                 from app_settings where user_id = :user_id
                 """,
-                {"user_id": self.default_user_id},
+                {"user_id": user_id},
             )
         row = rows[0]
         return AppSettings(
@@ -578,8 +626,8 @@ class PostgresPersistence(Persistence):
             sessionTimeoutMinutes=row.get("session_timeout_minutes"),
         )
 
-    def update_app_settings(self, payload: AppSettingsUpdate) -> AppSettings:
-        current = self.get_app_settings()
+    def update_app_settings(self, user_id: UUID, payload: AppSettingsUpdate) -> AppSettings:
+        current = self.get_app_settings(user_id)
         merged = current.model_dump()
         merged.update(payload.model_dump(exclude_unset=True))
         self._run(
@@ -611,32 +659,32 @@ class PostgresPersistence(Persistence):
                 "auto_backup_retention_days": merged["autoBackupRetentionDays"],
                 "auto_backup_last_run_at": merged["autoBackupLastRunAt"],
                 "session_timeout_minutes": merged.get("sessionTimeoutMinutes"),
-                "user_id": self.default_user_id,
+                "user_id": user_id,
             },
         )
         return AppSettings(**merged)
 
-    def list_locales(self) -> list[str]:
-        rows = self._run("select locale from locale_custom_messages where user_id = :user_id group by locale", {"user_id": self.default_user_id})
+    def list_locales(self, user_id: UUID) -> list[str]:
+        rows = self._run("select locale from locale_custom_messages where user_id = :user_id group by locale", {"user_id": user_id})
         custom = [r["locale"] for r in rows]
         return sorted(set(store.base_locales.keys()) | set(custom))
 
-    def get_locale_bundle(self, locale: str) -> dict[str, str]:
+    def get_locale_bundle(self, user_id: UUID, locale: str) -> dict[str, str]:
         rows = self._run(
             "select message_key, message_value from locale_custom_messages where user_id = :user_id and locale = :locale",
-            {"user_id": self.default_user_id, "locale": locale},
+            {"user_id": user_id, "locale": locale},
         )
         custom = {r["message_key"]: r["message_value"] for r in rows}
         return {**store.base_locales.get(locale, {}), **custom}
 
-    def get_custom_locale(self, locale: str) -> dict[str, str]:
+    def get_custom_locale(self, user_id: UUID, locale: str) -> dict[str, str]:
         rows = self._run(
             "select message_key, message_value from locale_custom_messages where user_id = :user_id and locale = :locale",
-            {"user_id": self.default_user_id, "locale": locale},
+            {"user_id": user_id, "locale": locale},
         )
         return {r["message_key"]: r["message_value"] for r in rows}
 
-    def upsert_custom_locale(self, locale: str, payload: dict[str, str]) -> dict[str, str]:
+    def upsert_custom_locale(self, user_id: UUID, locale: str, payload: dict[str, str]) -> dict[str, str]:
         for k, v in payload.items():
             self._run(
                 """
@@ -647,13 +695,13 @@ class PostgresPersistence(Persistence):
                 """,
                 {
                     "id": str(uuid4()),
-                    "user_id": self.default_user_id,
+                    "user_id": user_id,
                     "locale": locale,
                     "message_key": k,
                     "message_value": v,
                 },
             )
-        return self.get_locale_bundle(locale)
+        return self.get_locale_bundle(user_id, locale)
 
     def create_vehicle(self, payload: VehicleCreate) -> dict[str, Any]:
         row = self._run(
@@ -940,7 +988,7 @@ class PostgresPersistence(Persistence):
             out[key] = int(rows[0]["c"])
         return out
 
-    def export_backup(self) -> dict[str, Any]:
+    def export_backup(self, user_id: UUID) -> dict[str, Any]:
         return {
             "meta": {
                 "version": 1,
@@ -948,16 +996,16 @@ class PostgresPersistence(Persistence):
                 "storageBackend": "postgres",
             },
             "data": {
-                "appSettings": self.get_app_settings().model_dump(),
+                "appSettings": self.get_app_settings(user_id).model_dump(),
                 "customLocales": self._run(
                     "select locale, message_key, message_value from locale_custom_messages where user_id = :user_id order by locale, message_key",
-                    {"user_id": self.default_user_id},
+                    {"user_id": user_id},
                 ),
-                "users": self._run("select id, email, full_name, created_at, updated_at from users where id = :user_id", {"user_id": self.default_user_id}),
-                "userCredentials": self._run("select user_id, password_hash, created_at, updated_at from user_credentials where user_id = :user_id", {"user_id": self.default_user_id}),
-                "accounts": self._run("select * from accounts where user_id = :user_id order by created_at", {"user_id": self.default_user_id}),
-                "transactions": self._run("select * from transactions where user_id = :user_id order by created_at", {"user_id": self.default_user_id}),
-                "vehicles": self._run("select * from vehicles where user_id = :user_id order by created_at", {"user_id": self.default_user_id}),
+                "users": self._run("select id, email, full_name, created_at, updated_at from users where id = :user_id", {"user_id": user_id}),
+                "userCredentials": self._run("select user_id, password_hash, created_at, updated_at from user_credentials where user_id = :user_id", {"user_id": user_id}),
+                "accounts": self._run("select * from accounts where user_id = :user_id order by created_at", {"user_id": user_id}),
+                "transactions": self._run("select * from transactions where user_id = :user_id order by created_at", {"user_id": user_id}),
+                "vehicles": self._run("select * from vehicles where user_id = :user_id order by created_at", {"user_id": user_id}),
                 "vehicleServices": self._run(
                     """
                     select vs.* from vehicle_services vs
@@ -965,7 +1013,7 @@ class PostgresPersistence(Persistence):
                     where v.user_id = :user_id
                     order by vs.created_at
                     """,
-                    {"user_id": self.default_user_id},
+                    {"user_id": user_id},
                 ),
                 "vehicleServiceRules": self._run(
                     """
@@ -974,9 +1022,9 @@ class PostgresPersistence(Persistence):
                     where v.user_id = :user_id
                     order by vr.created_at
                     """,
-                    {"user_id": self.default_user_id},
+                    {"user_id": user_id},
                 ),
-                "properties": self._run("select * from properties where user_id = :user_id order by created_at", {"user_id": self.default_user_id}),
+                "properties": self._run("select * from properties where user_id = :user_id order by created_at", {"user_id": user_id}),
                 "propertyCosts": self._run(
                     """
                     select pc.* from property_costs pc
@@ -984,9 +1032,9 @@ class PostgresPersistence(Persistence):
                     where p.user_id = :user_id
                     order by pc.created_at
                     """,
-                    {"user_id": self.default_user_id},
+                    {"user_id": user_id},
                 ),
-                "insurances": self._run("select * from insurances where user_id = :user_id order by created_at", {"user_id": self.default_user_id}),
+                "insurances": self._run("select * from insurances where user_id = :user_id order by created_at", {"user_id": user_id}),
                 "insurancePremiums": self._run(
                     """
                     select ip.* from insurance_premiums ip
@@ -994,15 +1042,15 @@ class PostgresPersistence(Persistence):
                     where i.user_id = :user_id
                     order by ip.created_at
                     """,
-                    {"user_id": self.default_user_id},
+                    {"user_id": user_id},
                 ),
                 "calendarIntegrations": self._run(
                     "select * from calendar_integrations where user_id = :user_id order by created_at",
-                    {"user_id": self.default_user_id},
+                    {"user_id": user_id},
                 ),
                 "notificationRules": self._run(
                     "select * from notification_rules where user_id = :user_id order by created_at",
-                    {"user_id": self.default_user_id},
+                    {"user_id": user_id},
                 ),
                 "notificationDeliveries": self._run(
                     """
@@ -1011,7 +1059,7 @@ class PostgresPersistence(Persistence):
                     where nr.user_id = :user_id
                     order by nd.created_at
                     """,
-                    {"user_id": self.default_user_id},
+                    {"user_id": user_id},
                 ),
                 "calendarEvents": self._run(
                     """
@@ -1020,17 +1068,17 @@ class PostgresPersistence(Persistence):
                     where ci.user_id = :user_id
                     order by ce.created_at
                     """,
-                    {"user_id": self.default_user_id},
+                    {"user_id": user_id},
                 ),
             },
         }
 
-    def import_backup(self, payload: dict[str, Any]) -> dict[str, int]:
+    def import_backup(self, user_id: UUID, payload: dict[str, Any]) -> dict[str, int]:
         data = payload.get("data", {})
         with self.engine.begin() as conn:
             conn.execute(
                 text("insert into users (id, email) values (:id, :email) on conflict (id) do nothing"),
-                {"id": self.default_user_id, "email": "default@local"},
+                {"id": user_id, "email": "default@local"},
             )
             cleanup_sql = [
                 "delete from transactions where user_id = :user_id",
@@ -1051,7 +1099,7 @@ class PostgresPersistence(Persistence):
                 "delete from user_credentials where user_id = :user_id",
             ]
             for q in cleanup_sql:
-                conn.execute(text(q), {"user_id": self.default_user_id})
+                conn.execute(text(q), {"user_id": user_id})
 
             users_rows = data.get("users", [])
             if users_rows:
@@ -1065,7 +1113,7 @@ class PostgresPersistence(Persistence):
                             """
                         ),
                         {
-                            "id": u.get("id", self.default_user_id),
+                            "id": u.get("id", user_id),
                             "email": u.get("email", "default@local"),
                             "full_name": u.get("full_name"),
                         },
@@ -1076,7 +1124,7 @@ class PostgresPersistence(Persistence):
                     text(
                         "insert into user_credentials (user_id, password_hash) values (:user_id, :password_hash) on conflict (user_id) do update set password_hash = excluded.password_hash, updated_at = now()"
                     ),
-                    {"user_id": c.get("user_id", self.default_user_id), "password_hash": c.get("password_hash", hash_password("ChangeMe123!"))},
+                    {"user_id": c.get("user_id", user_id), "password_hash": c.get("password_hash", hash_password("ChangeMe123!"))},
                 )
 
             app_settings = data.get("appSettings", {})
@@ -1098,7 +1146,7 @@ class PostgresPersistence(Persistence):
                     ),
                     {
                         "id": str(uuid4()),
-                        "user_id": self.default_user_id,
+                        "user_id": user_id,
                         "default_timezone": app_settings.get("defaultTimezone", "Europe/Prague"),
                         "calendar_provider": app_settings.get("calendarProvider", "google"),
                         "calendar_sync_enabled": app_settings.get("calendarSyncEnabled", True),
@@ -1133,7 +1181,7 @@ class PostgresPersistence(Persistence):
                         ),
                         {
                             "id": str(uuid4()),
-                            "user_id": self.default_user_id,
+                            "user_id": user_id,
                             "locale": row["locale"],
                             "message_key": row["message_key"],
                             "message_value": row["message_value"],
@@ -1149,7 +1197,7 @@ class PostgresPersistence(Persistence):
                 for r in rows:
                     params = {c: r.get(c) for c in cols}
                     if force_user:
-                        params["user_id"] = self.default_user_id
+                        params["user_id"] = user_id
                     conn.execute(stmt, params)
 
             insert_rows("vehicles", data.get("vehicles", []), ["id", "user_id", "type", "label", "vin", "plate_number", "make", "model", "production_year", "purchased_at", "current_odometer_km", "notes"], True)
@@ -1171,7 +1219,7 @@ class PostgresPersistence(Persistence):
                     ),
                     {
                         "id": row.get("id", str(uuid4())),
-                        "user_id": self.default_user_id,
+                        "user_id": user_id,
                         "provider": row.get("provider", "google"),
                         "external_calendar_id": row.get("external_calendar_id", row.get("externalCalendarId", "primary")),
                         "access_token_encrypted": row.get("access_token_encrypted", "imported-token"),
@@ -1186,10 +1234,10 @@ class PostgresPersistence(Persistence):
 
         return self.debug_counts()
 
-    def mark_auto_backup_run(self, when: datetime) -> None:
+    def mark_auto_backup_run(self, user_id: UUID, when: datetime) -> None:
         self._run(
             "update app_settings set auto_backup_last_run_at = :when, updated_at = now() where user_id = :user_id",
-            {"when": when, "user_id": self.default_user_id},
+            {"when": when, "user_id": user_id},
         )
 
     def register_user(self, email: str, password: str, full_name: str | None) -> dict[str, Any]:
@@ -1230,6 +1278,37 @@ class PostgresPersistence(Persistence):
     def get_user_by_id(self, user_id: UUID) -> dict[str, Any] | None:
         rows = self._run("select id, email, full_name from users where id = :id limit 1", {"id": user_id})
         return rows[0] if rows else None
+
+    def update_user_profile(self, user_id: UUID, email: str | None, full_name: str | None) -> dict[str, Any]:
+        row = self.get_user_by_id(user_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="user not found")
+        new_email = row["email"] if email is None else email
+        new_full_name = row.get("full_name") if full_name is None else full_name
+        if email is not None:
+            exists = self._run(
+                "select id from users where lower(email) = lower(:email) and id <> :id limit 1",
+                {"email": email, "id": user_id},
+            )
+            if exists:
+                raise HTTPException(status_code=409, detail="email already registered")
+        updated = self._run(
+            "update users set email = :email, full_name = :full_name, updated_at = now() where id = :id returning id, email, full_name",
+            {"id": user_id, "email": new_email, "full_name": new_full_name},
+        )
+        return updated[0]
+
+    def change_user_password(self, user_id: UUID, current_password: str, new_password: str) -> None:
+        self._ensure_auth_columns()
+        row = self._run("select password_hash from user_credentials where user_id = :id limit 1", {"id": user_id})
+        if not row:
+            raise HTTPException(status_code=404, detail="credentials not found")
+        if not verify_password(current_password, row[0]["password_hash"]):
+            raise HTTPException(status_code=401, detail="invalid current password")
+        self._run(
+            "update user_credentials set password_hash = :password_hash, updated_at = now() where user_id = :id",
+            {"id": user_id, "password_hash": hash_password(new_password)},
+        )
 
     def create_account(self, user_id: UUID, payload: AccountCreate) -> dict[str, Any]:
         self._ensure_auth_columns()
@@ -1355,6 +1434,8 @@ class PostgresPersistence(Persistence):
             merged["amount"] = _to_float(updates["amount"])
         if "currency" in updates:
             merged["currency"] = updates["currency"]
+        if "occurredAt" in updates:
+            merged["transaction_at"] = updates["occurredAt"]
         if "category" in updates:
             merged["category"] = updates["category"]
         if "note" in updates:
@@ -1362,7 +1443,7 @@ class PostgresPersistence(Persistence):
         row = self._run(
             """
             update transactions
-            set direction = :direction, amount = :amount, currency = :currency, category = :category, note = :note, updated_at = now()
+            set direction = :direction, amount = :amount, currency = :currency, transaction_at = :transaction_at, category = :category, note = :note, updated_at = now()
             where id = :id and user_id = :user_id
             returning id, account_id, direction, amount, currency, transaction_at, category, note
             """,
@@ -1372,6 +1453,7 @@ class PostgresPersistence(Persistence):
                 "direction": merged["direction"],
                 "amount": merged["amount"],
                 "currency": merged["currency"],
+                "transaction_at": merged["transaction_at"],
                 "category": merged.get("category"),
                 "note": merged.get("note"),
             },

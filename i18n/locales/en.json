@@ -117,6 +117,16 @@
   "settings.delete_account_ask_backup": "Create backup before delete?",
   "settings.delete_account_confirm": "This action is permanent. Delete account now?",
   "settings.delete_account_done": "Account deleted.",
+  "settings.profile": "Profile",
+  "settings.profile_email": "Email",
+  "settings.profile_name": "Display name",
+  "settings.save_profile": "Save Profile",
+  "settings.current_password": "Current password",
+  "settings.new_password": "New password",
+  "settings.change_password": "Change Password",
+  "settings.profile_saved": "Profile saved.",
+  "settings.password_saved": "Password updated.",
+  "common.donate": "Buy me a coffee",
   "dashboard.chart_title": "Balance Trend",
   "dashboard.chart_account": "Account",
   "dashboard.chart_period": "Period",
@@ -129,5 +139,8 @@
   "account.type.cash": "Cash",
   "account.type.savings": "Savings",
   "transaction.direction.income": "Income",
-  "transaction.direction.expense": "Expense"
+  "transaction.direction.expense": "Expense",
+  "account.type.crypto": "Crypto",
+  "account.type.stocks": "Stocks",
+  "account.type.custom": "Custom"
 }

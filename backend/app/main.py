@@ -37,6 +37,9 @@ from .schemas import (
     LocaleListResponse,
     LocalePublishResponse,
     LoginRequest,
+    UserProfileResponse,
+    UserProfileUpdate,
+    UserPasswordChange,
     NotificationRuleCreate,
     NotificationRuleResponse,
     PropertyCostCreate,
@@ -93,9 +96,9 @@ def _extract_token_from_request(request: Request) -> str | None:
     return request.cookies.get(SESSION_COOKIE_NAME)
 
 
-def _session_timeout_minutes() -> int | None:
+def _session_timeout_minutes(user_id: UUID) -> int | None:
     try:
-        return persistence.get_app_settings().sessionTimeoutMinutes
+        return persistence.get_app_settings(user_id).sessionTimeoutMinutes
     except Exception:
         return None
 
@@ -108,13 +111,17 @@ def _get_session_user_id(token: str | None) -> UUID | None:
         return None
     now = datetime.now(timezone.utc)
     last_seen = session.get("last_seen", now)
-    timeout_minutes = _session_timeout_minutes()
+    current_user_id = session.get("user_id")
+    if current_user_id is None:
+        del active_sessions[token]
+        return None
+    timeout_minutes = _session_timeout_minutes(current_user_id)
     if timeout_minutes and (now - last_seen) > timedelta(minutes=timeout_minutes):
         del active_sessions[token]
         return None
     session["last_seen"] = now
     active_sessions[token] = session
-    return session.get("user_id")
+    return current_user_id
 
 
 def _create_session(user_id: UUID) -> str:
@@ -185,8 +192,8 @@ async def get_app_settings(
     authorization: str | None = Header(default=None),
     session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
 ) -> AppSettings:
-    _require_user(authorization, session_token)
-    return persistence.get_app_settings()
+    user_id = _require_user(authorization, session_token)
+    return persistence.get_app_settings(user_id)
 
 
 @app.put("/api/v1/settings/app", response_model=AppSettings)
@@ -195,8 +202,8 @@ async def update_app_settings(
     authorization: str | None = Header(default=None),
     session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
 ) -> AppSettings:
-    _require_user(authorization, session_token)
-    return persistence.update_app_settings(payload)
+    user_id = _require_user(authorization, session_token)
+    return persistence.update_app_settings(user_id, payload)
 
 
 @app.get("/api/v1/i18n/locales", response_model=LocaleListResponse)
@@ -204,8 +211,8 @@ async def get_locales(
     authorization: str | None = Header(default=None),
     session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
 ) -> LocaleListResponse:
-    _require_user(authorization, session_token)
-    locales = persistence.list_locales()
+    user_id = _require_user(authorization, session_token)
+    locales = persistence.list_locales(user_id)
     return LocaleListResponse(locales=locales)
 
 
@@ -220,8 +227,8 @@ async def get_locale_bundle(
     authorization: str | None = Header(default=None),
     session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
 ) -> LocaleBundleResponse:
-    _require_user(authorization, session_token)
-    messages = persistence.get_locale_bundle(locale)
+    user_id = _require_user(authorization, session_token)
+    messages = persistence.get_locale_bundle(user_id, locale)
     if not messages:
         raise HTTPException(status_code=404, detail=f"locale not found: {locale}")
     return LocaleBundleResponse(locale=locale, messages=messages)
@@ -242,8 +249,8 @@ async def upsert_custom_locale(
     authorization: str | None = Header(default=None),
     session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
 ) -> LocaleBundleResponse:
-    _require_user(authorization, session_token)
-    merged = persistence.upsert_custom_locale(locale, payload)
+    user_id = _require_user(authorization, session_token)
+    merged = persistence.upsert_custom_locale(user_id, locale, payload)
     return LocaleBundleResponse(locale=locale, messages=merged)
 
 
@@ -253,8 +260,8 @@ async def publish_custom_locale(
     authorization: str | None = Header(default=None),
     session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
 ) -> LocalePublishResponse:
-    _require_user(authorization, session_token)
-    custom = persistence.get_custom_locale(locale)
+    user_id = _require_user(authorization, session_token)
+    custom = persistence.get_custom_locale(user_id, locale)
     if not custom:
         raise HTTPException(status_code=404, detail=f"custom locale not found: {locale}")
     file_path = CUSTOM_LOCALES_DIR / f"{locale}.json"
@@ -337,6 +344,40 @@ async def auth_me(authorization: str | None = Header(default=None), session_toke
         raise HTTPException(status_code=401, detail="user not found")
     token = _token_from_header(authorization) if authorization else session_token
     return AuthResponse(token=token, userId=user["id"], email=user["email"], fullName=user.get("full_name"))
+
+
+@app.get("/api/v1/users/me", response_model=UserProfileResponse)
+async def get_user_profile(
+    authorization: str | None = Header(default=None),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> UserProfileResponse:
+    user_id = _require_user(authorization, session_token)
+    user = persistence.get_user_by_id(user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="user not found")
+    return UserProfileResponse(userId=user["id"], email=user["email"], fullName=user.get("full_name"))
+
+
+@app.put("/api/v1/users/me", response_model=UserProfileResponse)
+async def update_user_profile(
+    payload: UserProfileUpdate,
+    authorization: str | None = Header(default=None),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> UserProfileResponse:
+    user_id = _require_user(authorization, session_token)
+    user = persistence.update_user_profile(user_id, payload.email, payload.fullName)
+    return UserProfileResponse(userId=user["id"], email=user["email"], fullName=user.get("full_name"))
+
+
+@app.post("/api/v1/users/me/change-password")
+async def change_user_password(
+    payload: UserPasswordChange,
+    authorization: str | None = Header(default=None),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> dict[str, bool]:
+    user_id = _require_user(authorization, session_token)
+    persistence.change_user_password(user_id, payload.currentPassword, payload.newPassword)
+    return {"updated": True}
 
 
 @app.post("/api/v1/auth/logout")
@@ -492,8 +533,8 @@ async def export_backup(
     authorization: str | None = Header(default=None),
     session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
 ) -> dict[str, Any]:
-    _require_user(authorization, session_token)
-    return persistence.export_backup()
+    user_id = _require_user(authorization, session_token)
+    return persistence.export_backup(user_id)
 
 
 @app.post("/api/v1/bootstrap/restore", response_model=BackupImportResponse)
@@ -505,7 +546,16 @@ async def bootstrap_restore(file: UploadFile = File(...)) -> BackupImportRespons
         payload = json.loads(content.decode("utf-8"))
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=400, detail=f"invalid JSON: {exc}") from exc
-    counts = persistence.import_backup(payload)
+    user_id: UUID | None = None
+    default_user_id = getattr(persistence, "default_user_id", None)
+    if default_user_id:
+        user_id = UUID(str(default_user_id))
+    elif store.users:
+        user_id = next(iter(store.users.keys()))
+    if user_id is None:
+        user = persistence.register_user("bootstrap@local", "ChangeMe123!", "Bootstrap User")
+        user_id = user["id"]
+    counts = persistence.import_backup(user_id, payload)
     return BackupImportResponse(replaced=True, counts=counts)
 
 
@@ -514,8 +564,10 @@ async def download_backup(
     authorization: str | None = Header(default=None),
     session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
 ) -> Response:
-    _require_user(authorization, session_token)
-    backup = persistence.export_backup()
+    user_id = _require_user(authorization, session_token)
+    file_path, ts = _create_backup_file(user_id)
+    persistence.mark_auto_backup_run(user_id, ts)
+    backup = json.loads(file_path.read_text(encoding="utf-8"))
     content = json.dumps(jsonable_encoder(backup), ensure_ascii=False, indent=2).encode("utf-8")
     return Response(
         content=content,
@@ -530,10 +582,10 @@ def _backup_file_path(ts: datetime | None = None) -> Path:
     return BACKUP_DIR / f"my-finance-backup-{stamp}.json"
 
 
-def _create_backup_file() -> tuple[Path, datetime]:
+def _create_backup_file(user_id: UUID) -> tuple[Path, datetime]:
     ts = datetime.now(timezone.utc)
     file_path = _backup_file_path(ts)
-    payload = persistence.export_backup()
+    payload = persistence.export_backup(user_id)
     file_path.write_text(json.dumps(jsonable_encoder(payload), ensure_ascii=False, indent=2), encoding="utf-8")
     return file_path, ts
 
@@ -551,10 +603,10 @@ async def run_backup_now(
     authorization: str | None = Header(default=None),
     session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
 ) -> BackupRunResponse:
-    _require_user(authorization, session_token)
-    settings = persistence.get_app_settings()
-    file_path, ts = _create_backup_file()
-    persistence.mark_auto_backup_run(ts)
+    user_id = _require_user(authorization, session_token)
+    settings = persistence.get_app_settings(user_id)
+    file_path, ts = _create_backup_file(user_id)
+    persistence.mark_auto_backup_run(user_id, ts)
     _cleanup_old_backups(settings.autoBackupRetentionDays)
     return BackupRunResponse(created=True, file=str(file_path.relative_to(ROOT_DIR)), timestamp=ts)
 
@@ -565,8 +617,8 @@ async def import_backup(
     authorization: str | None = Header(default=None),
     session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
 ) -> BackupImportResponse:
-    _require_user(authorization, session_token)
-    counts = persistence.import_backup(payload)
+    user_id = _require_user(authorization, session_token)
+    counts = persistence.import_backup(user_id, payload)
     return BackupImportResponse(replaced=True, counts=counts)
 
 
@@ -576,7 +628,7 @@ async def import_backup_file(
     authorization: str | None = Header(default=None),
     session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
 ) -> BackupImportResponse:
-    _require_user(authorization, session_token)
+    user_id = _require_user(authorization, session_token)
     if not file.filename.lower().endswith(".json"):
         raise HTTPException(status_code=400, detail="backup file must be JSON")
     content = await file.read()
@@ -584,7 +636,7 @@ async def import_backup_file(
         payload = json.loads(content.decode("utf-8"))
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=400, detail=f"invalid JSON: {exc}") from exc
-    counts = persistence.import_backup(payload)
+    counts = persistence.import_backup(user_id, payload)
     return BackupImportResponse(replaced=True, counts=counts)
 
 
@@ -592,14 +644,21 @@ async def _auto_backup_loop() -> None:
     while True:
         await asyncio.sleep(60)
         try:
-            cfg = persistence.get_app_settings()
+            default_user_id = getattr(persistence, "default_user_id", None)
+            if default_user_id:
+                scheduler_user_id = UUID(str(default_user_id))
+            elif store.users:
+                scheduler_user_id = next(iter(store.users.keys()))
+            else:
+                continue
+            cfg = persistence.get_app_settings(scheduler_user_id)
             if not cfg.autoBackupEnabled:
                 continue
             now = datetime.now(timezone.utc)
             last = cfg.autoBackupLastRunAt
             if last is None or (now - last).total_seconds() >= cfg.autoBackupIntervalMinutes * 60:
-                _, ts = _create_backup_file()
-                persistence.mark_auto_backup_run(ts)
+                _, ts = _create_backup_file(scheduler_user_id)
+                persistence.mark_auto_backup_run(scheduler_user_id, ts)
                 _cleanup_old_backups(cfg.autoBackupRetentionDays)
         except Exception:
             # Keep scheduler alive even if one run fails.

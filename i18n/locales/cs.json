@@ -117,6 +117,16 @@
   "settings.delete_account_ask_backup": "Vytvořit před smazáním zálohu?",
   "settings.delete_account_confirm": "Tato akce je nevratná. Opravdu smazat účet?",
   "settings.delete_account_done": "Účet byl smazán.",
+  "settings.profile": "Profil",
+  "settings.profile_email": "E-mail",
+  "settings.profile_name": "Zobrazované jméno",
+  "settings.save_profile": "Uložit profil",
+  "settings.current_password": "Aktuální heslo",
+  "settings.new_password": "Nové heslo",
+  "settings.change_password": "Změnit heslo",
+  "settings.profile_saved": "Profil uložen.",
+  "settings.password_saved": "Heslo změněno.",
+  "common.donate": "Buy me a coffee",
   "dashboard.chart_title": "Vývoj zůstatku",
   "dashboard.chart_account": "Účet",
   "dashboard.chart_period": "Období",
@@ -129,5 +139,8 @@
   "account.type.cash": "Hotovost",
   "account.type.savings": "Spoření",
   "transaction.direction.income": "Příjem",
-  "transaction.direction.expense": "Výdaj"
+  "transaction.direction.expense": "Výdaj",
+  "account.type.crypto": "Krypto",
+  "account.type.stocks": "Akcie",
+  "account.type.custom": "Vlastní"
 }

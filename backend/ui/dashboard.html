@@ -12,35 +12,36 @@
     body.dark { --bg:#0c1625; --surface:#13253a; --text:#e6f0ff; --primary:#5ea8ff; --border:#274565; --shadow:0 8px 24px rgba(0,0,0,.35); --err:#ff8a80; --ok:#6ed69b; }
     * { box-sizing: border-box; }
     body { margin: 0; padding: 24px; font-family: "Roboto", sans-serif; background: var(--bg); color: var(--text); }
-    .container { max-width: 1120px; margin: 0 auto; display: grid; gap: 16px; }
+    .container { max-width: 1200px; margin: 0 auto; display: grid; gap: 16px; }
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 20px; }
-    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .top-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .user-menu { position: relative; }
-    .menu-btn { width: auto; margin: 0; background: transparent; border: 1px solid var(--border); color: var(--text); }
-    .menu { position: absolute; right: 0; top: 42px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; min-width: 180px; box-shadow: var(--shadow); display: none; z-index: 20; }
-    .menu.open { display: block; }
-    .menu button { margin: 0; border-radius: 0; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text); text-align: left; }
-    .menu button:last-child { border-bottom: 0; color: var(--err); }
-    .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
-    .box { border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
-    input, select, button, textarea { width: 100%; border-radius: 10px; font-size: 14px; border: 1px solid var(--border); padding: 10px 12px; margin-bottom: 8px; }
-    input, select, textarea { background: #fff; color: var(--text); }
-    body.dark input, body.dark select, body.dark textarea { background: #0f1f33; color: #f0f6ff; border-color: #385c83; }
-    body.dark select option { background: #0f1f33; color: #f0f6ff; }
-    button { background: var(--primary); color: #fff; border: 0; font-weight: 500; cursor: pointer; }
-    button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
-    pre { background: #0d1b2f; color: #d7e8ff; padding: 12px; border-radius: 10px; overflow: auto; min-height: 160px; }
-    body.dark pre { background: #0a1320; color: #cae0ff; }
-    .msg { font-size: 14px; margin-top: 8px; }
-    .msg.ok { color: var(--ok); }
-    .msg.err { color: var(--err); }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .top-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
     .nav { color: var(--primary); text-decoration: none; font-weight: 500; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border-bottom: 1px solid var(--border); text-align: left; padding: 8px; }
-    #editPanel { display: none; }
-    #chartCanvas { width: 100%; height: 260px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
-    body.dark #chartCanvas { background: #0f1f33; }
+    .user-menu { position:relative; }
+    .menu-btn { width:auto; margin:0; background:transparent; border:1px solid var(--border); color:var(--text); }
+    .menu { position:absolute; right:0; top:42px; background:var(--surface); border:1px solid var(--border); border-radius:10px; min-width:180px; box-shadow:var(--shadow); display:none; z-index:20; }
+    .menu.open { display:block; }
+    .menu button { margin:0; border-radius:0; border:0; border-bottom:1px solid var(--border); background:transparent; color:var(--text); text-align:left; }
+    .menu button:last-child { border-bottom:0; color:var(--err); }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; }
+    .box { border:1px solid var(--border); border-radius:12px; padding:14px; }
+    input,select,button { width:100%; border-radius:10px; font-size:14px; border:1px solid var(--border); padding:10px 12px; margin-bottom:8px; }
+    input,select { background:#fff; color:var(--text); }
+    body.dark input, body.dark select { background:#0f1f33; color:#f0f6ff; border-color:#385c83; }
+    body.dark select option { background:#0f1f33; color:#f0f6ff; }
+    button { background:var(--primary); color:#fff; border:0; font-weight:500; cursor:pointer; }
+    button.secondary { background:transparent; border:1px solid var(--border); color:var(--text); }
+    .msg { font-size:14px; margin-top:8px; }
+    .msg.ok { color:var(--ok); }
+    .msg.err { color:var(--err); }
+    table { width:100%; border-collapse:collapse; }
+    th,td { border-bottom:1px solid var(--border); text-align:left; padding:8px; vertical-align:middle; }
+    th { font-size:13px; }
+    td input, td select { margin:0; min-width:100px; padding:6px 8px; font-size:13px; }
+    pre { background:#0d1b2f; color:#d7e8ff; padding:12px; border-radius:10px; overflow:auto; min-height:160px; }
+    #chartCanvas { width:100%; height:280px; border:1px solid var(--border); border-radius:12px; background:#fff; }
+    body.dark #chartCanvas { background:#0f1f33; }
+    .inline { display:flex; gap:8px; }
   </style>
 </head>
 <body>
@@ -49,6 +50,7 @@
       <div class="topbar">
         <div><h1 id="title">Dashboard</h1><p id="subtitle">Accounts and transactions.</p></div>
         <div class="top-actions">
+          <a class="nav" id="donateLink" href="https://buymeacoffee.com/marek9336y" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
           <a class="nav" href="/ui/dashboard" id="navDashboard">Dashboard</a>
           <a class="nav" href="/ui/settings" id="navSettings">Settings</a>
           <div class="user-menu">
@@ -62,7 +64,7 @@
 
     <div class="card">
       <h3 id="chartTitle">Balance Trend</h3>
-      <div class="row">
+      <div class="grid">
         <div>
           <label id="chartAccountLabel" for="chartAccount">Account</label>
           <select id="chartAccount"></select>
@@ -77,14 +79,22 @@
           </select>
         </div>
       </div>
-      <canvas id="chartCanvas" width="1040" height="260"></canvas>
+      <canvas id="chartCanvas" width="1120" height="280"></canvas>
     </div>
 
-    <div class="card row">
+    <div class="card grid">
       <div class="box">
         <h3 id="createAccountTitle">Create Account</h3>
         <input id="accName" placeholder="Main account" />
-        <select id="accType"><option value="checking">checking</option><option value="cash">cash</option><option value="savings">savings</option></select>
+        <select id="accType">
+          <option value="checking">checking</option>
+          <option value="cash">cash</option>
+          <option value="savings">savings</option>
+          <option value="crypto">crypto</option>
+          <option value="stocks">stocks</option>
+          <option value="custom">custom</option>
+        </select>
+        <input id="accTypeCustom" placeholder="Custom account type" style="display:none" />
         <input id="accCurrency" value="CZK" />
         <input id="accBalance" type="number" step="0.01" value="0" />
         <button id="accBtn" type="button">Create Account</button>
@@ -95,19 +105,10 @@
         <select id="txDirection"><option value="expense">expense</option><option value="income">income</option></select>
         <input id="txAmount" type="number" step="0.01" value="100" />
         <input id="txCurrency" value="CZK" />
+        <input id="txDate" type="date" />
         <input id="txCategory" placeholder="Category (optional)" />
         <input id="txNote" placeholder="Note (optional)" />
         <button id="txBtn" type="button">Create Transaction</button>
-      </div>
-    </div>
-
-    <div id="editPanel" class="card">
-      <h3 id="editTitle">Edit</h3>
-      <input id="editName" />
-      <textarea id="editNote" rows="3"></textarea>
-      <div class="row">
-        <button id="saveEditBtn" type="button">Save</button>
-        <button id="cancelEditBtn" type="button" class="secondary">Cancel</button>
       </div>
     </div>
 
@@ -121,32 +122,32 @@
       <pre id="out" style="display:none">Loading...</pre>
     </div>
   </div>
+
   <script>
     const FALLBACK = {
       en: {
-        title:"Dashboard", subtitle:"Accounts and transactions.", dashboard:"Dashboard", settings:"Settings", createAccount:"Create Account", createTx:"Create Transaction", refresh:"Refresh Data", logout:"Logout",
-        edit:"Edit", advanced:"Advanced JSON", accounts:"Accounts", transactions:"Transactions", accountCreated:"Account created.", txCreated:"Transaction created.", createAccountFirst:"Create account first.",
-        authReq:"Authentication required.", name:"Name", type:"Type", currency:"Currency", balance:"Balance", date:"Date", direction:"Direction", amount:"Amount", category:"Category", note:"Note",
-        phAccount:"Main account", phCategory:"Category (optional)", phNote:"Note (optional)", save:"Save", cancel:"Cancel", editAccount:"Edit account", editTransaction:"Edit transaction", saved:"Saved.",
-        checking:"Checking", cash:"Cash", savings:"Savings", income:"Income", expense:"Expense", chartTitle:"Balance Trend", chartAccount:"Account", chartPeriod:"Period",
-        periodWeek:"7 days", periodMonth:"30 days", periodYear:"365 days", periodAll:"All", allAccounts:"All accounts"
+        title:"Dashboard", subtitle:"Accounts and transactions.", dashboard:"Dashboard", settings:"Settings", donate:"Buy me a coffee", createAccount:"Create Account", createTx:"Create Transaction",
+        refresh:"Refresh Data", logout:"Logout", advanced:"Advanced JSON", accounts:"Accounts", transactions:"Transactions", accountCreated:"Account created.", txCreated:"Transaction created.",
+        createAccountFirst:"Create account first.", authReq:"Authentication required.", name:"Name", type:"Type", currency:"Currency", balance:"Balance", date:"Date", direction:"Direction",
+        amount:"Amount", category:"Category", note:"Note", actions:"Actions", phAccount:"Main account", phCategory:"Category (optional)", phNote:"Note (optional)", save:"Save", saved:"Saved.",
+        checking:"Checking", cash:"Cash", savings:"Savings", crypto:"Crypto", stocks:"Stocks", custom:"Custom", income:"Income", expense:"Expense",
+        chartTitle:"Balance Trend", chartAccount:"Account", chartPeriod:"Period", periodWeek:"7 days", periodMonth:"30 days", periodYear:"365 days", periodAll:"All", allAccounts:"All accounts"
       },
       cs: {
-        title:"Přehled", subtitle:"Účty a transakce.", dashboard:"Přehled", settings:"Nastavení", createAccount:"Vytvořit účet", createTx:"Vytvořit transakci", refresh:"Obnovit data", logout:"Odhlásit",
-        edit:"Upravit", advanced:"Pokročilý JSON", accounts:"Účty", transactions:"Transakce", accountCreated:"Účet byl vytvořen.", txCreated:"Transakce byla vytvořena.", createAccountFirst:"Nejdříve vytvoř účet.",
-        authReq:"Je vyžadováno přihlášení.", name:"Název", type:"Typ", currency:"Měna", balance:"Zůstatek", date:"Datum", direction:"Směr", amount:"Částka", category:"Kategorie", note:"Poznámka",
-        phAccount:"Hlavní účet", phCategory:"Kategorie (volitelné)", phNote:"Poznámka (volitelné)", save:"Uložit", cancel:"Zrušit", editAccount:"Upravit účet", editTransaction:"Upravit transakci", saved:"Uloženo.",
-        checking:"Běžný účet", cash:"Hotovost", savings:"Spoření", income:"Příjem", expense:"Výdaj", chartTitle:"Vývoj zůstatku", chartAccount:"Účet", chartPeriod:"Období",
-        periodWeek:"7 dní", periodMonth:"30 dní", periodYear:"365 dní", periodAll:"Vše", allAccounts:"Všechny účty"
+        title:"Přehled", subtitle:"Účty a transakce.", dashboard:"Přehled", settings:"Nastavení", donate:"Buy me a coffee", createAccount:"Vytvořit účet", createTx:"Vytvořit transakci",
+        refresh:"Obnovit data", logout:"Odhlásit", advanced:"Pokročilý JSON", accounts:"Účty", transactions:"Transakce", accountCreated:"Účet byl vytvořen.", txCreated:"Transakce byla vytvořena.",
+        createAccountFirst:"Nejdříve vytvoř účet.", authReq:"Je vyžadováno přihlášení.", name:"Název", type:"Typ", currency:"Měna", balance:"Zůstatek", date:"Datum", direction:"Směr",
+        amount:"Částka", category:"Kategorie", note:"Poznámka", actions:"Akce", phAccount:"Hlavní účet", phCategory:"Kategorie (volitelné)", phNote:"Poznámka (volitelné)", save:"Uložit", saved:"Uloženo.",
+        checking:"Běžný účet", cash:"Hotovost", savings:"Spoření", crypto:"Krypto", stocks:"Akcie", custom:"Vlastní", income:"Příjem", expense:"Výdaj",
+        chartTitle:"Vývoj zůstatku", chartAccount:"Účet", chartPeriod:"Období", periodWeek:"7 dní", periodMonth:"30 dní", periodYear:"365 dní", periodAll:"Vše", allAccounts:"Všechny účty"
       }
     };
     let M = {};
-    let editState = null;
     let allAccounts = [];
     let allTransactions = [];
-    function lang() { return localStorage.getItem("mf_lang") || "en"; }
-    function t(key) { return M[key] || FALLBACK[lang()][key] || key; }
-    async function loadLocaleMessages(locale) {
+    function lang(){ return localStorage.getItem("mf_lang") || "en"; }
+    function t(k){ return M[k] || FALLBACK[lang()][k] || k; }
+    async function loadLocaleMessages(locale){
       M = { ...FALLBACK[locale] };
       try {
         const res = await fetch(`/api/v1/i18n/${locale}`, { credentials: "include" });
@@ -156,259 +157,188 @@
         }
       } catch (_) {}
     }
-    function applyTheme() {
-      const theme = localStorage.getItem("mf_theme") || "system";
-      document.body.classList.remove("dark");
-      if (theme === "dark" || (theme === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches)) document.body.classList.add("dark");
-    }
-    function accountTypeLabel(v) { if (v === "checking") return t("checking"); if (v === "cash") return t("cash"); if (v === "savings") return t("savings"); return v; }
-    function directionLabel(v) { if (v === "income") return t("income"); if (v === "expense") return t("expense"); return v; }
-    function applyTexts() {
+    function accountTypeLabel(v){ const map={checking:"checking",cash:"cash",savings:"savings",crypto:"crypto",stocks:"stocks",custom:"custom"}; return t(map[v] || v) || v; }
+    function directionLabel(v){ return v === "income" ? t("income") : (v === "expense" ? t("expense") : v); }
+    function applyTheme(){ const theme=localStorage.getItem("mf_theme")||"system"; document.body.classList.remove("dark"); if(theme==="dark"||(theme==="system"&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches)){ document.body.classList.add("dark"); } }
+    function setMsg(text,isError=false){ const m=document.getElementById("msg"); m.textContent=text; m.className=`msg ${isError?"err":"ok"}`; }
+    function mapError(msg){ const m=(msg||"").toLowerCase(); if(m.includes("authentication required")||m.includes("invalid or expired token")) return t("authReq"); return msg; }
+    async function parseError(res){ try{ const d=await res.json(); if(d?.error?.details?.length) return d.error.details.map(x=>`${x.field}: ${x.message}`).join("; "); if(d?.detail) return mapError(d.detail);}catch(_){} return `HTTP ${res.status}`; }
+    async function api(path, method="GET", body=null){ const r=await fetch(path,{method,headers:{"Content-Type":"application/json"},body:body?JSON.stringify(body):null,credentials:"include"}); if(!r.ok) throw new Error(await parseError(r)); return await r.json(); }
+    function applyTexts(){
       document.documentElement.lang = lang();
-      document.getElementById("title").textContent = t("title");
-      document.getElementById("subtitle").textContent = t("subtitle");
-      document.getElementById("navDashboard").textContent = t("dashboard");
-      document.getElementById("navSettings").textContent = t("settings");
-      document.getElementById("createAccountTitle").textContent = t("createAccount");
-      document.getElementById("createTxTitle").textContent = t("createTx");
-      document.getElementById("refreshBtn").textContent = t("refresh");
-      document.getElementById("logoutBtn").textContent = t("logout");
-      document.getElementById("toggleAdvancedBtn").textContent = t("advanced");
-      document.getElementById("accountsHeading").textContent = t("accounts");
-      document.getElementById("transactionsHeading").textContent = t("transactions");
-      document.getElementById("accBtn").textContent = t("createAccount");
-      document.getElementById("txBtn").textContent = t("createTx");
-      document.getElementById("accName").placeholder = t("phAccount");
-      document.getElementById("txCategory").placeholder = t("phCategory");
-      document.getElementById("txNote").placeholder = t("phNote");
-      document.getElementById("saveEditBtn").textContent = t("save");
-      document.getElementById("cancelEditBtn").textContent = t("cancel");
-      document.getElementById("chartTitle").textContent = t("chartTitle");
-      document.getElementById("chartAccountLabel").textContent = t("chartAccount");
-      document.getElementById("chartPeriodLabel").textContent = t("chartPeriod");
-      const accountType = document.getElementById("accType");
-      accountType.options[0].textContent = t("checking");
-      accountType.options[1].textContent = t("cash");
-      accountType.options[2].textContent = t("savings");
-      const txDir = document.getElementById("txDirection");
-      txDir.options[0].textContent = t("expense");
-      txDir.options[1].textContent = t("income");
-      const period = document.getElementById("chartPeriod");
-      period.options[0].textContent = t("periodWeek");
-      period.options[1].textContent = t("periodMonth");
-      period.options[2].textContent = t("periodYear");
-      period.options[3].textContent = t("periodAll");
+      document.getElementById("title").textContent=t("title");
+      document.getElementById("subtitle").textContent=t("subtitle");
+      document.getElementById("donateLink").textContent=t("donate");
+      document.getElementById("navDashboard").textContent=t("dashboard");
+      document.getElementById("navSettings").textContent=t("settings");
+      document.getElementById("logoutBtn").textContent=t("logout");
+      document.getElementById("createAccountTitle").textContent=t("createAccount");
+      document.getElementById("createTxTitle").textContent=t("createTx");
+      document.getElementById("refreshBtn").textContent=t("refresh");
+      document.getElementById("toggleAdvancedBtn").textContent=t("advanced");
+      document.getElementById("accountsHeading").textContent=t("accounts");
+      document.getElementById("transactionsHeading").textContent=t("transactions");
+      document.getElementById("accBtn").textContent=t("createAccount");
+      document.getElementById("txBtn").textContent=t("createTx");
+      document.getElementById("accName").placeholder=t("phAccount");
+      document.getElementById("txCategory").placeholder=t("phCategory");
+      document.getElementById("txNote").placeholder=t("phNote");
+      document.getElementById("chartTitle").textContent=t("chartTitle");
+      document.getElementById("chartAccountLabel").textContent=t("chartAccount");
+      document.getElementById("chartPeriodLabel").textContent=t("chartPeriod");
+      const accType=document.getElementById("accType");
+      accType.options[0].textContent=t("checking"); accType.options[1].textContent=t("cash"); accType.options[2].textContent=t("savings"); accType.options[3].textContent=t("crypto"); accType.options[4].textContent=t("stocks"); accType.options[5].textContent=t("custom");
+      const txDir=document.getElementById("txDirection");
+      txDir.options[0].textContent=t("expense"); txDir.options[1].textContent=t("income");
+      const period=document.getElementById("chartPeriod");
+      period.options[0].textContent=t("periodWeek"); period.options[1].textContent=t("periodMonth"); period.options[2].textContent=t("periodYear"); period.options[3].textContent=t("periodAll");
     }
-    function setMsg(text, isError = false) {
-      const m = document.getElementById("msg");
-      m.textContent = text;
-      m.className = `msg ${isError ? "err" : "ok"}`;
+    async function loadUser(){ const me=await api("/api/v1/auth/me"); document.getElementById("userBtn").textContent=me.fullName?`${me.fullName} (${me.email})`:me.email; }
+    function renderAccounts(accounts){
+      const table=document.getElementById("accountsTable");
+      table.innerHTML=`<thead><tr><th>${t("name")}</th><th>${t("type")}</th><th>${t("currency")}</th><th>${t("balance")}</th></tr></thead><tbody></tbody>`;
+      const tb=table.querySelector("tbody");
+      accounts.forEach(a=>{ const tr=document.createElement("tr"); tr.innerHTML=`<td>${a.name}</td><td>${accountTypeLabel(a.accountType)}</td><td>${a.currency}</td><td>${a.currentBalance}</td>`; tb.appendChild(tr); });
     }
-    function mapError(msg) {
-      const m = (msg || "").toLowerCase();
-      if (m.includes("authentication required") || m.includes("invalid or expired token")) return t("authReq");
-      return msg;
-    }
-    async function parseError(res) {
-      try {
-        const d = await res.json();
-        if (d && d.error && d.error.details && d.error.details.length) return d.error.details.map((x) => `${x.field}: ${x.message}`).join("; ");
-        if (d && d.detail) return mapError(d.detail);
-      } catch (_) {}
-      return `HTTP ${res.status}`;
-    }
-    async function api(path, method = "GET", body = null) {
-      const r = await fetch(path, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : null, credentials: "include" });
-      if (!r.ok) throw new Error(await parseError(r));
-      return await r.json();
-    }
-    async function loadUser() {
-      const me = await api("/api/v1/auth/me");
-      document.getElementById("userBtn").textContent = me.fullName ? `${me.fullName} (${me.email})` : me.email;
-    }
-    function renderAccounts(accounts) {
-      const table = document.getElementById("accountsTable");
-      table.innerHTML = `<thead><tr><th>${t("name")}</th><th>${t("type")}</th><th>${t("currency")}</th><th>${t("balance")}</th><th></th></tr></thead><tbody></tbody>`;
-      const tb = table.querySelector("tbody");
-      accounts.forEach((a) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${a.name}</td><td>${accountTypeLabel(a.accountType)}</td><td>${a.currency}</td><td>${a.currentBalance}</td><td><button data-id="${a.id}" data-name="${encodeURIComponent(a.name)}" class="edit-account secondary" style="width:auto">${t("edit")}</button></td>`;
+    function renderTransactions(transactions){
+      const table=document.getElementById("transactionsTable");
+      table.innerHTML=`<thead><tr><th>${t("date")}</th><th>${t("direction")}</th><th>${t("amount")}</th><th>${t("currency")}</th><th>${t("category")}</th><th>${t("note")}</th><th>${t("actions")}</th></tr></thead><tbody></tbody>`;
+      const tb=table.querySelector("tbody");
+      transactions.forEach(tx=>{
+        const tr=document.createElement("tr");
+        const txDate = new Date(tx.occurredAt);
+        const dateVal = txDate.toISOString().slice(0,10);
+        tr.innerHTML = `
+          <td><input data-field="occurredAt" data-id="${tx.id}" type="date" value="${dateVal}" /></td>
+          <td><select data-field="direction" data-id="${tx.id}"><option value="expense"${tx.direction==="expense"?" selected":""}>${t("expense")}</option><option value="income"${tx.direction==="income"?" selected":""}>${t("income")}</option></select></td>
+          <td><input data-field="amount" data-id="${tx.id}" type="number" step="0.01" value="${Number(tx.amount)}" /></td>
+          <td><input data-field="currency" data-id="${tx.id}" value="${tx.currency}" /></td>
+          <td><input data-field="category" data-id="${tx.id}" value="${tx.category || ""}" /></td>
+          <td><input data-field="note" data-id="${tx.id}" value="${tx.note || ""}" /></td>
+          <td><button class="save-tx secondary" data-id="${tx.id}" style="width:auto">${t("save")}</button></td>
+        `;
         tb.appendChild(tr);
       });
     }
-    function renderTransactions(transactions) {
-      const table = document.getElementById("transactionsTable");
-      table.innerHTML = `<thead><tr><th>${t("date")}</th><th>${t("direction")}</th><th>${t("amount")}</th><th>${t("category")}</th><th>${t("note")}</th><th></th></tr></thead><tbody></tbody>`;
-      const tb = table.querySelector("tbody");
-      transactions.forEach((tx) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${new Date(tx.occurredAt).toLocaleString()}</td><td>${directionLabel(tx.direction)}</td><td>${tx.amount} ${tx.currency}</td><td>${tx.category || ""}</td><td>${tx.note || ""}</td><td><button data-id="${tx.id}" data-note="${encodeURIComponent(tx.note || "")}" class="edit-tx secondary" style="width:auto">${t("edit")}</button></td>`;
-        tb.appendChild(tr);
-      });
-    }
-    function chartDataset() {
-      const period = document.getElementById("chartPeriod").value;
-      const accountId = document.getElementById("chartAccount").value;
-      let filtered = [...allTransactions];
-      if (accountId && accountId !== "all") filtered = filtered.filter((t) => t.accountId === accountId);
-      const now = Date.now();
-      if (period === "week") filtered = filtered.filter((t) => now - new Date(t.occurredAt).getTime() <= 7 * 86400000);
-      if (period === "month") filtered = filtered.filter((t) => now - new Date(t.occurredAt).getTime() <= 30 * 86400000);
-      if (period === "year") filtered = filtered.filter((t) => now - new Date(t.occurredAt).getTime() <= 365 * 86400000);
-      filtered.sort((a, b) => new Date(a.occurredAt) - new Date(b.occurredAt));
-      const map = new Map();
-      filtered.forEach((tx) => {
-        const day = new Date(tx.occurredAt).toISOString().slice(0, 10);
-        const sign = tx.direction === "income" ? 1 : -1;
-        map.set(day, (map.get(day) || 0) + sign * Number(tx.amount || 0));
-      });
-      const labels = [...map.keys()];
-      let run = 0;
-      const values = labels.map((k) => { run += map.get(k); return run; });
-      return { labels, values };
-    }
-    function drawChart() {
-      const canvas = document.getElementById("chartCanvas");
-      const ctx = canvas.getContext("2d");
-      const { labels, values } = chartDataset();
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "#0f6ecf";
-      ctx.fillStyle = "#6eaeea";
-      if (!values.length) {
-        ctx.fillStyle = "#7d8fa8";
-        ctx.fillText("No data", 20, 30);
-        return;
-      }
-      const min = Math.min(...values);
-      const max = Math.max(...values);
-      const pad = 30;
-      const w = canvas.width - pad * 2;
-      const h = canvas.height - pad * 2;
-      const yScale = (v) => pad + (max === min ? h / 2 : h - ((v - min) / (max - min)) * h);
-      const xScale = (i) => pad + (labels.length <= 1 ? 0 : (i / (labels.length - 1)) * w);
-      ctx.beginPath();
-      values.forEach((v, i) => { const x = xScale(i); const y = yScale(v); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
-      ctx.stroke();
-      ctx.fillStyle = "#274565";
-      ctx.font = "12px Roboto";
-      ctx.fillText(`${labels[0]} -> ${labels[labels.length - 1]}`, pad, canvas.height - 8);
-    }
-    function fillChartAccountSelect() {
-      const sel = document.getElementById("chartAccount");
+    function fillChartAccountSelect(){
+      const sel=document.getElementById("chartAccount");
       const current = sel.value || "all";
       sel.innerHTML = "";
-      const allOpt = document.createElement("option");
-      allOpt.value = "all";
-      allOpt.textContent = t("allAccounts");
-      sel.appendChild(allOpt);
-      allAccounts.forEach((a) => {
-        const o = document.createElement("option");
-        o.value = a.id;
-        o.textContent = a.name;
-        sel.appendChild(o);
-      });
-      sel.value = [...sel.options].some((o) => o.value === current) ? current : "all";
+      const allOpt=document.createElement("option"); allOpt.value="all"; allOpt.textContent=t("allAccounts"); sel.appendChild(allOpt);
+      allAccounts.forEach(a=>{ const o=document.createElement("option"); o.value=a.id; o.textContent=a.name; sel.appendChild(o); });
+      sel.value=[...sel.options].some(o=>o.value===current)?current:"all";
     }
-    async function refreshAll() {
+    function chartSeries(){
+      const period=document.getElementById("chartPeriod").value;
+      const accountId=document.getElementById("chartAccount").value;
+      let txs=[...allTransactions];
+      if(accountId && accountId!=="all") txs = txs.filter(x=>x.accountId===accountId);
+      const now=Date.now();
+      const limitDays = period==="week"?7:(period==="month"?30:(period==="year"?365:null));
+      if(limitDays) txs = txs.filter(x => (now - new Date(x.occurredAt).getTime()) <= (limitDays*86400000));
+      txs.sort((a,b)=>new Date(a.occurredAt)-new Date(b.occurredAt));
+      const byDay = new Map();
+      txs.forEach(tx => {
+        const day = new Date(tx.occurredAt).toISOString().slice(0,10);
+        const delta = (tx.direction==="income"?1:-1)*Number(tx.amount||0);
+        byDay.set(day, (byDay.get(day)||0)+delta);
+      });
+      const labels=[...byDay.keys()];
+      let run=0;
+      const values=labels.map(k=>{ run+=byDay.get(k); return run; });
+      return { labels, values };
+    }
+    function drawChart(){
+      const canvas=document.getElementById("chartCanvas");
+      const ctx=canvas.getContext("2d");
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      const { labels, values } = chartSeries();
+      const pad=36;
+      const w=canvas.width-pad*2;
+      const h=canvas.height-pad*2;
+      ctx.strokeStyle = "#8ea9c7";
+      ctx.beginPath(); ctx.moveTo(pad,pad); ctx.lineTo(pad,pad+h); ctx.lineTo(pad+w,pad+h); ctx.stroke();
+      if(!values.length){
+        ctx.fillStyle="#7089a7";
+        ctx.font="13px Roboto";
+        ctx.fillText("No data for selected period", pad+8, pad+20);
+        return;
+      }
+      const min=Math.min(...values), max=Math.max(...values);
+      const yScale=(v)=> pad + (max===min ? h/2 : h - ((v-min)/(max-min))*h);
+      const xScale=(i)=> pad + (values.length===1 ? w/2 : (i/(values.length-1))*w);
+      ctx.strokeStyle="#0f6ecf";
+      ctx.lineWidth=2;
+      ctx.beginPath();
+      values.forEach((v,i)=>{ const x=xScale(i), y=yScale(v); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+      ctx.stroke();
+      ctx.fillStyle="#0f6ecf";
+      values.forEach((v,i)=>{ const x=xScale(i), y=yScale(v); ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill(); });
+      ctx.fillStyle="#274565";
+      ctx.font="12px Roboto";
+      ctx.fillText(`${labels[0]} -> ${labels[labels.length-1]}`, pad, canvas.height-10);
+    }
+    async function refreshAll(){
       const [accounts, transactions] = await Promise.all([api("/api/v1/accounts"), api("/api/v1/transactions")]);
       allAccounts = accounts;
       allTransactions = transactions;
-      const sel = document.getElementById("txAccount");
-      sel.innerHTML = "";
-      accounts.forEach((a) => {
-        const o = document.createElement("option");
-        o.value = a.id;
-        o.textContent = `${a.name} (${a.currentBalance} ${a.currency})`;
-        sel.appendChild(o);
-      });
-      fillChartAccountSelect();
+      const txAccount=document.getElementById("txAccount");
+      txAccount.innerHTML="";
+      accounts.forEach(a=>{ const o=document.createElement("option"); o.value=a.id; o.textContent=`${a.name} (${a.currentBalance} ${a.currency})`; txAccount.appendChild(o); });
       renderAccounts(accounts);
       renderTransactions(transactions);
+      fillChartAccountSelect();
       drawChart();
       document.getElementById("out").textContent = JSON.stringify({ accounts, transactions }, null, 2);
     }
-    function openEditPanelAccount(accountId, currentName) {
-      editState = { type: "account", id: accountId };
-      document.getElementById("editPanel").style.display = "block";
-      document.getElementById("editTitle").textContent = t("editAccount");
-      document.getElementById("editName").style.display = "block";
-      document.getElementById("editNote").style.display = "none";
-      document.getElementById("editName").value = currentName || "";
-    }
-    function openEditPanelTransaction(transactionId, currentNote) {
-      editState = { type: "transaction", id: transactionId };
-      document.getElementById("editPanel").style.display = "block";
-      document.getElementById("editTitle").textContent = t("editTransaction");
-      document.getElementById("editName").style.display = "none";
-      document.getElementById("editNote").style.display = "block";
-      document.getElementById("editNote").value = currentNote || "";
-    }
-    async function saveEdit() {
-      if (!editState) return;
-      if (editState.type === "account") {
-        await api(`/api/v1/accounts/${editState.id}`, "PUT", { name: document.getElementById("editName").value.trim() });
-      } else if (editState.type === "transaction") {
-        await api(`/api/v1/transactions/${editState.id}`, "PUT", { note: document.getElementById("editNote").value });
-      }
-      setMsg(t("saved"));
-      closeEdit();
-      await refreshAll();
-    }
-    function closeEdit() { editState = null; document.getElementById("editPanel").style.display = "none"; }
-    async function createAccount() {
-      await api("/api/v1/accounts", "POST", {
-        name: document.getElementById("accName").value,
-        accountType: document.getElementById("accType").value,
-        currency: document.getElementById("accCurrency").value,
-        initialBalance: Number(document.getElementById("accBalance").value || 0)
-      });
+    async function createAccount(){
+      const type = document.getElementById("accType").value === "custom" ? (document.getElementById("accTypeCustom").value.trim() || "custom") : document.getElementById("accType").value;
+      await api("/api/v1/accounts","POST",{ name:document.getElementById("accName").value, accountType:type, currency:document.getElementById("accCurrency").value, initialBalance:Number(document.getElementById("accBalance").value||0) });
       setMsg(t("accountCreated"));
       await refreshAll();
     }
-    async function createTx() {
-      const accountId = document.getElementById("txAccount").value;
-      if (!accountId) throw new Error(t("createAccountFirst"));
-      await api("/api/v1/transactions", "POST", {
-        accountId,
-        direction: document.getElementById("txDirection").value,
-        amount: Number(document.getElementById("txAmount").value || 0),
-        currency: document.getElementById("txCurrency").value,
-        occurredAt: new Date().toISOString(),
-        category: document.getElementById("txCategory").value || null,
-        note: document.getElementById("txNote").value || null
-      });
+    async function createTx(){
+      const accountId=document.getElementById("txAccount").value;
+      if(!accountId) throw new Error(t("createAccountFirst"));
+      const selectedDate = document.getElementById("txDate").value;
+      const occurredAt = selectedDate ? new Date(`${selectedDate}T12:00:00`).toISOString() : new Date().toISOString();
+      await api("/api/v1/transactions","POST",{ accountId, direction:document.getElementById("txDirection").value, amount:Number(document.getElementById("txAmount").value||0), currency:document.getElementById("txCurrency").value, occurredAt, category:document.getElementById("txCategory").value||null, note:document.getElementById("txNote").value||null });
       setMsg(t("txCreated"));
       await refreshAll();
     }
-    async function logout() { await api("/api/v1/auth/logout", "POST"); window.location.href = "/ui/get-started"; }
-    async function safe(fn) { try { await fn(); } catch (e) { setMsg(mapError(e.message), true); } }
+    async function saveTxRow(id){
+      const row = [...document.querySelectorAll(`[data-id="${id}"]`)];
+      const payload = {};
+      row.forEach(el=>{
+        const field = el.getAttribute("data-field");
+        if(!field) return;
+        if(field==="amount") payload.amount = Number(el.value || 0);
+        else if(field==="occurredAt") payload.occurredAt = new Date(`${el.value}T12:00:00`).toISOString();
+        else if(field==="category"||field==="note") payload[field]=el.value || null;
+        else payload[field]=el.value;
+      });
+      await api(`/api/v1/transactions/${id}`,"PUT",payload);
+      setMsg(t("saved"));
+      await refreshAll();
+    }
+    async function logout(){ await api("/api/v1/auth/logout","POST"); window.location.href="/ui/get-started"; }
+    async function safe(fn){ try{ await fn(); }catch(e){ setMsg(mapError(e.message), true); } }
 
-    const menu = document.getElementById("userMenu");
-    document.getElementById("userBtn").addEventListener("click", () => menu.classList.toggle("open"));
-    document.addEventListener("click", (e) => { if (!e.target.closest(".user-menu")) menu.classList.remove("open"); });
-    document.getElementById("logoutBtn").addEventListener("click", () => safe(logout));
-    document.getElementById("accBtn").addEventListener("click", () => safe(createAccount));
-    document.getElementById("txBtn").addEventListener("click", () => safe(createTx));
-    document.getElementById("refreshBtn").addEventListener("click", () => safe(refreshAll));
-    document.getElementById("toggleAdvancedBtn").addEventListener("click", () => {
-      const p = document.getElementById("out");
-      p.style.display = p.style.display === "none" ? "block" : "none";
-    });
-    document.getElementById("accountsTable").addEventListener("click", (e) => {
-      const b = e.target.closest(".edit-account");
-      if (b) openEditPanelAccount(b.dataset.id, decodeURIComponent(b.dataset.name || ""));
-    });
-    document.getElementById("transactionsTable").addEventListener("click", (e) => {
-      const b = e.target.closest(".edit-tx");
-      if (b) openEditPanelTransaction(b.dataset.id, decodeURIComponent(b.dataset.note || ""));
-    });
-    document.getElementById("saveEditBtn").addEventListener("click", () => safe(saveEdit));
-    document.getElementById("cancelEditBtn").addEventListener("click", closeEdit);
-    document.getElementById("chartPeriod").addEventListener("change", drawChart);
-    document.getElementById("chartAccount").addEventListener("change", drawChart);
+    document.getElementById("txDate").value = new Date().toISOString().slice(0,10);
+    const menu=document.getElementById("userMenu");
+    document.getElementById("userBtn").addEventListener("click",()=>menu.classList.toggle("open"));
+    document.addEventListener("click",(e)=>{ if(!e.target.closest(".user-menu")) menu.classList.remove("open"); });
+    document.getElementById("logoutBtn").addEventListener("click",()=>safe(logout));
+    document.getElementById("accBtn").addEventListener("click",()=>safe(createAccount));
+    document.getElementById("txBtn").addEventListener("click",()=>safe(createTx));
+    document.getElementById("refreshBtn").addEventListener("click",()=>safe(refreshAll));
+    document.getElementById("toggleAdvancedBtn").addEventListener("click",()=>{ const p=document.getElementById("out"); p.style.display=p.style.display==="none"?"block":"none"; });
+    document.getElementById("accType").addEventListener("change",(e)=>{ document.getElementById("accTypeCustom").style.display = e.target.value==="custom" ? "block" : "none"; });
+    document.getElementById("transactionsTable").addEventListener("click",(e)=>{ const b=e.target.closest(".save-tx"); if(b) safe(()=>saveTxRow(b.dataset.id)); });
+    document.getElementById("chartPeriod").addEventListener("change",drawChart);
+    document.getElementById("chartAccount").addEventListener("change",drawChart);
 
-    (async () => {
+    (async()=>{
       applyTheme();
       await loadLocaleMessages(lang());
       applyTexts();

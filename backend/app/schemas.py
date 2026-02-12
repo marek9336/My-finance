@@ -409,6 +409,32 @@ class AuthResponse(BaseModel):
     fullName: Optional[str] = None
 
 
+class UserProfileResponse(BaseModel):
+    userId: UUID
+    email: str
+    fullName: Optional[str] = None
+
+
+class UserProfileUpdate(BaseModel):
+    email: Optional[str] = None
+    fullName: Optional[str] = None
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        v = value.strip().lower()
+        if "@" not in v or "." not in v.split("@")[-1]:
+            raise ValueError("invalid email format")
+        return v
+
+
+class UserPasswordChange(BaseModel):
+    currentPassword: str = Field(min_length=8, max_length=128)
+    newPassword: str = Field(min_length=8, max_length=128)
+
+
 class AccountCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     accountType: str = Field(default="checking", min_length=1, max_length=50)
@@ -490,6 +516,7 @@ class TransactionUpdate(BaseModel):
     direction: Optional[str] = None
     amount: Optional[Decimal] = Field(default=None, gt=Decimal("0"))
     currency: Optional[str] = None
+    occurredAt: Optional[datetime] = None
     category: Optional[str] = None
     note: Optional[str] = None
 

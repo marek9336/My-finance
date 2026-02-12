@@ -60,3 +60,6 @@ __pycache__/
 # Docker overrides and local compose files
 docker-compose.override.yml
 *.local.yml
+
+# Local planning
+TODO.md
