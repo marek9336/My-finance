@@ -848,6 +848,8 @@ class PostgresPersistence(Persistence):
             """
             alter table if exists app_settings
               add column if not exists default_locale text not null default 'en',
+              add column if not exists default_display_currency text not null default 'CZK',
+              add column if not exists secondary_display_currency text not null default 'USD',
               add column if not exists auto_backup_enabled boolean not null default false,
               add column if not exists auto_backup_interval_minutes integer not null default 1440,
               add column if not exists auto_backup_retention_days integer not null default 30,
@@ -938,6 +940,7 @@ class PostgresPersistence(Persistence):
         rows = self._run(
             """
             select default_locale, default_timezone, calendar_provider, calendar_sync_enabled, self_registration_enabled, smtp_enabled,
+                   default_display_currency, secondary_display_currency,
                    auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at,
                    session_timeout_minutes
             from app_settings
@@ -950,16 +953,17 @@ class PostgresPersistence(Persistence):
                 """
                 insert into app_settings (
                   id, user_id, default_timezone, calendar_provider, calendar_sync_enabled, self_registration_enabled, smtp_enabled,
-                  default_locale, auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at,
+                  default_locale, default_display_currency, secondary_display_currency, auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at,
                   session_timeout_minutes
                 )
-                values (:id, :user_id, 'Europe/Prague', 'google', true, true, false, 'en', false, 1440, 30, null, null)
+                values (:id, :user_id, 'Europe/Prague', 'google', true, true, false, 'en', 'CZK', 'USD', false, 1440, 30, null, null)
                 """,
                 {"id": str(uuid4()), "user_id": user_id},
             )
             rows = self._run(
                 """
                 select default_locale, default_timezone, calendar_provider, calendar_sync_enabled, self_registration_enabled, smtp_enabled,
+                       default_display_currency, secondary_display_currency,
                        auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at,
                        session_timeout_minutes
                 from app_settings where user_id = :user_id
@@ -970,6 +974,8 @@ class PostgresPersistence(Persistence):
         return AppSettings(
             defaultLocale=row.get("default_locale", "en"),
             defaultTimezone=row["default_timezone"],
+            defaultDisplayCurrency=row.get("default_display_currency", "CZK"),
+            secondaryDisplayCurrency=row.get("secondary_display_currency", "USD"),
             calendarProvider=row["calendar_provider"],
             calendarSyncEnabled=row["calendar_sync_enabled"],
             selfRegistrationEnabled=row["self_registration_enabled"],
@@ -990,6 +996,8 @@ class PostgresPersistence(Persistence):
             update app_settings
             set default_locale = :default_locale,
                 default_timezone = :default_timezone,
+                default_display_currency = :default_display_currency,
+                secondary_display_currency = :secondary_display_currency,
                 calendar_provider = :calendar_provider,
                 calendar_sync_enabled = :calendar_sync_enabled,
                 self_registration_enabled = :self_registration_enabled,
@@ -1005,6 +1013,8 @@ class PostgresPersistence(Persistence):
             {
                 "default_locale": merged["defaultLocale"],
                 "default_timezone": merged["defaultTimezone"],
+                "default_display_currency": merged["defaultDisplayCurrency"],
+                "secondary_display_currency": merged["secondaryDisplayCurrency"],
                 "calendar_provider": merged["calendarProvider"],
                 "calendar_sync_enabled": merged["calendarSyncEnabled"],
                 "self_registration_enabled": merged["selfRegistrationEnabled"],
@@ -1592,12 +1602,12 @@ class PostgresPersistence(Persistence):
                         """
                         insert into app_settings (
                           id, user_id, default_timezone, calendar_provider, calendar_sync_enabled, self_registration_enabled, smtp_enabled,
-                          default_locale, auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at,
+                          default_locale, default_display_currency, secondary_display_currency, auto_backup_enabled, auto_backup_interval_minutes, auto_backup_retention_days, auto_backup_last_run_at,
                           session_timeout_minutes
                         )
                         values (
                           :id, :user_id, :default_timezone, :calendar_provider, :calendar_sync_enabled, :self_registration_enabled, :smtp_enabled,
-                          :default_locale, :auto_backup_enabled, :auto_backup_interval_minutes, :auto_backup_retention_days, :auto_backup_last_run_at,
+                          :default_locale, :default_display_currency, :secondary_display_currency, :auto_backup_enabled, :auto_backup_interval_minutes, :auto_backup_retention_days, :auto_backup_last_run_at,
                           :session_timeout_minutes
                         )
                         """
@@ -1611,6 +1621,8 @@ class PostgresPersistence(Persistence):
                         "self_registration_enabled": app_settings.get("selfRegistrationEnabled", True),
                         "smtp_enabled": app_settings.get("smtpEnabled", False),
                         "default_locale": app_settings.get("defaultLocale", "en"),
+                        "default_display_currency": app_settings.get("defaultDisplayCurrency", "CZK"),
+                        "secondary_display_currency": app_settings.get("secondaryDisplayCurrency", "USD"),
                         "auto_backup_enabled": app_settings.get("autoBackupEnabled", False),
                         "auto_backup_interval_minutes": app_settings.get("autoBackupIntervalMinutes", 1440),
                         "auto_backup_retention_days": app_settings.get("autoBackupRetentionDays", 30),

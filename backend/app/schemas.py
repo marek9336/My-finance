@@ -326,6 +326,8 @@ class HealthResponse(BaseModel):
 class AppSettings(BaseModel):
     defaultLocale: str = "en"
     defaultTimezone: str = "Europe/Prague"
+    defaultDisplayCurrency: str = "CZK"
+    secondaryDisplayCurrency: str = "USD"
     calendarProvider: str = "google"
     calendarSyncEnabled: bool = True
     selfRegistrationEnabled: bool = True
@@ -336,10 +338,20 @@ class AppSettings(BaseModel):
     autoBackupLastRunAt: Optional[datetime] = None
     sessionTimeoutMinutes: Optional[int] = Field(default=None, ge=1)
 
+    @field_validator("defaultDisplayCurrency", "secondaryDisplayCurrency")
+    @classmethod
+    def validate_display_currency(cls, value: str) -> str:
+        up = value.strip().upper()
+        if len(up) != 3:
+            raise ValueError("must be 3-letter ISO code")
+        return up
+
 
 class AppSettingsUpdate(BaseModel):
     defaultLocale: Optional[str] = None
     defaultTimezone: Optional[str] = None
+    defaultDisplayCurrency: Optional[str] = None
+    secondaryDisplayCurrency: Optional[str] = None
     calendarProvider: Optional[str] = None
     calendarSyncEnabled: Optional[bool] = None
     selfRegistrationEnabled: Optional[bool] = None
@@ -349,6 +361,16 @@ class AppSettingsUpdate(BaseModel):
     autoBackupRetentionDays: Optional[int] = Field(default=None, ge=1)
     autoBackupLastRunAt: Optional[datetime] = None
     sessionTimeoutMinutes: Optional[int] = Field(default=None, ge=1)
+
+    @field_validator("defaultDisplayCurrency", "secondaryDisplayCurrency")
+    @classmethod
+    def validate_display_currency(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        up = value.strip().upper()
+        if len(up) != 3:
+            raise ValueError("must be 3-letter ISO code")
+        return up
 
 
 class RatesWatchlistUpdate(BaseModel):

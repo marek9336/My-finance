@@ -12,7 +12,7 @@
       <div class="topbar">
         <div class="top-left">
           <h1 id="title">Savings & Investments</h1>
-          <p id="subtitle">Page skeleton is ready. Feature implementation follows roadmap.</p>
+          <p id="subtitle"><span id="subtitleText">Page skeleton is ready. Feature implementation follows roadmap.</span><span class="dev-flag" id="devInvestments" title="In development">⚠️</span></p>
           <div class="menu-row">
             <a href="/ui/dashboard" id="navOverview">Overview</a>
             <a href="/ui/transactions" id="navTransactions">Transactions</a>
@@ -54,7 +54,10 @@
       const t=(k,f='')=>MFUI.t(k,f);
       document.title=t('page.investments.title','Savings & Investments');
       document.getElementById('title').textContent=t('page.investments.title','Savings & Investments');
-      document.getElementById('subtitle').textContent=t('page.common.subtitle','Page skeleton is ready. Feature implementation follows roadmap.');
+      const subtitleText=document.getElementById('subtitleText');
+      if (subtitleText) subtitleText.textContent=t('page.common.subtitle','Page skeleton is ready. Feature implementation follows roadmap.');
+      const devInvestments=document.getElementById('devInvestments');
+      if (devInvestments) devInvestments.title=t('common.in_development','This part is still in development.');
       document.getElementById('scopeTitle').textContent=t('page.common.scope','Planned Scope');
       document.getElementById('li1').textContent=t('page.common.li1','Data model and API wiring');
       document.getElementById('li2').textContent=t('page.common.li2','Primary tables and forms');
@@ -66,7 +69,7 @@
       };
       const nav=document.querySelector('a[href="/ui/savings-investments"]');
       if(nav) nav.classList.add('active');
-    })().catch((e)=>MFUI.setMsg(String(e.message||e),true));
+    })().catch((e)=>MFUI.setMsg(MFUI.formatError(String(e.message||e)),true));
   </script>
 </body>
 </html>

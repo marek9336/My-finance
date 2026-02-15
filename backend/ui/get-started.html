@@ -31,6 +31,21 @@
     .cookie { position: fixed; left: 16px; right: 16px; bottom: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 12px; display:none; z-index: 40; }
     .cookie-row { display:flex; gap:8px; flex-wrap:wrap; }
     .cookie-row button { width:auto; margin:0; }
+    .auth-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .auth-actions button { width:auto; margin:0; }
+    dialog.auth-dialog {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+      color: var(--text);
+      width: min(460px, 95vw);
+      box-shadow: var(--shadow);
+      padding: 0;
+    }
+    dialog.auth-dialog::backdrop { background: rgba(0,0,0,.45); }
+    .dialog-content { padding: 16px; }
+    .dialog-actions { display:flex; gap:8px; justify-content:flex-end; }
+    .dialog-actions button { width:auto; margin:0; }
   </style>
 </head>
 <body>
@@ -66,23 +81,44 @@
       </div>
     </div>
 
-    <div id="authRow" class="card row">
-      <div class="box">
-        <h3 id="registerTitle">Register</h3>
-        <input id="regEmail" type="email" placeholder="email@example.com" />
-        <input id="regName" placeholder="Full name (optional)" />
-        <input id="regPassword" type="password" placeholder="Password (min 8)" />
-        <button id="regBtn" type="button">Register</button>
-      </div>
-      <div class="box">
-        <h3 id="loginTitle">Login</h3>
-        <input id="loginEmail" type="email" placeholder="email@example.com" />
-        <input id="loginPassword" type="password" placeholder="Password" />
-        <label class="check"><input id="rememberMe" type="checkbox"><span id="rememberLabel">Stay signed in</span></label>
-        <button id="loginBtn" type="button">Login</button>
+    <div id="authRow" class="card">
+      <h3 id="authTitle">Sign In or Register</h3>
+      <div class="auth-actions">
+        <button id="openLoginBtn" type="button">Login</button>
+        <button id="openRegisterBtn" type="button" class="secondary">Register</button>
       </div>
     </div>
   </div>
+
+  <dialog id="loginDialog" class="auth-dialog">
+    <div class="dialog-content">
+      <h3 id="loginTitle">Login</h3>
+      <form id="loginForm" autocomplete="on">
+        <input id="loginEmail" name="username" type="email" autocomplete="username" placeholder="email@example.com" />
+        <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Password" />
+        <label class="check"><input id="rememberMe" type="checkbox"><span id="rememberLabel">Stay signed in</span></label>
+        <div class="dialog-actions">
+          <button id="loginCancelBtn" type="button" class="secondary">Cancel</button>
+          <button id="loginBtn" type="submit">Login</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog id="registerDialog" class="auth-dialog">
+    <div class="dialog-content">
+      <h3 id="registerTitle">Register</h3>
+      <form id="registerForm" autocomplete="on">
+        <input id="regEmail" name="email" type="email" autocomplete="email" placeholder="email@example.com" />
+        <input id="regName" name="name" autocomplete="name" placeholder="Full name (optional)" />
+        <input id="regPassword" name="new-password" type="password" autocomplete="new-password" placeholder="Password (min 8)" />
+        <div class="dialog-actions">
+          <button id="registerCancelBtn" type="button" class="secondary">Cancel</button>
+          <button id="regBtn" type="submit">Register</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
 
   <div id="cookieBanner" class="cookie">
     <p id="cookieText">This app uses cookies for sign-in and secure session.</p>
@@ -96,9 +132,10 @@
     const FALLBACK = {
       en: {
         title: "Get Started", subtitle: "Choose app language, timezone, appearance and create your account.",
-        setupTitle: "Initial Setup", restoreTitle: "Restore Database", registerTitle: "Register", loginTitle: "Login",
+        setupTitle: "Initial Setup", restoreTitle: "Restore Database", registerTitle: "Register", loginTitle: "Login", authTitle: "Sign In or Register",
         langLabel: "Language", tzLabel: "Timezone", themeLabel: "Appearance", detectTz: "Detect Timezone",
         restoreBtn: "Restore Backup JSON", regBtn: "Register", loginBtn: "Login", rememberLabel: "Stay signed in",
+        openLoginBtn: "Login", openRegisterBtn: "Register", cancelBtn: "Cancel",
         regEmailPh: "email@example.com", regNamePh: "Full name (optional)", regPassPh: "Password (min 8)", loginEmailPh: "email@example.com", loginPassPh: "Password",
         errFill: "Fill email and password.", errSelect: "Select backup file.", errPwd: "Password must have at least 8 characters.", errEmail: "Invalid email format.",
         tzDetected: "Timezone detected: ", restoreDone: "Restore completed. Accounts: ", alreadyLoggedIn: "You are already signed in.",
@@ -107,9 +144,10 @@
       },
       cs: {
         title: "Začínáme", subtitle: "Nastav jazyk, časové pásmo, vzhled a vytvoř účet.",
-        setupTitle: "První nastavení", restoreTitle: "Obnovit databázi", registerTitle: "Registrace", loginTitle: "Přihlášení",
+        setupTitle: "První nastavení", restoreTitle: "Obnovit databázi", registerTitle: "Registrace", loginTitle: "Přihlášení", authTitle: "Přihlášení nebo registrace",
         langLabel: "Jazyk", tzLabel: "Časové pásmo", themeLabel: "Vzhled", detectTz: "Zjistit časové pásmo",
         restoreBtn: "Obnovit zálohu JSON", regBtn: "Registrovat", loginBtn: "Přihlásit", rememberLabel: "Zůstat přihlášen",
+        openLoginBtn: "Přihlášení", openRegisterBtn: "Registrace", cancelBtn: "Zrušit",
         regEmailPh: "email@example.com", regNamePh: "Celé jméno (volitelné)", regPassPh: "Heslo (min. 8 znaků)", loginEmailPh: "email@example.com", loginPassPh: "Heslo",
         errFill: "Vyplň e-mail a heslo.", errSelect: "Vyber soubor se zálohou.", errPwd: "Heslo musí mít alespoň 8 znaků.", errEmail: "Neplatný formát e-mailu.",
         tzDetected: "Detekované časové pásmo: ", restoreDone: "Obnova dokončena. Účty: ", alreadyLoggedIn: "Už jsi přihlášen.",
@@ -203,6 +241,7 @@
       document.getElementById("restoreTitle").textContent = t("restoreTitle");
       document.getElementById("registerTitle").textContent = t("registerTitle");
       document.getElementById("loginTitle").textContent = t("loginTitle");
+      document.getElementById("authTitle").textContent = t("authTitle");
       document.getElementById("langLabel").textContent = t("langLabel");
       document.getElementById("tzLabel").textContent = t("tzLabel");
       document.getElementById("themeLabel").textContent = t("themeLabel");
@@ -210,6 +249,10 @@
       document.getElementById("restoreBtn").textContent = t("restoreBtn");
       document.getElementById("regBtn").textContent = t("regBtn");
       document.getElementById("loginBtn").textContent = t("loginBtn");
+      document.getElementById("openLoginBtn").textContent = t("openLoginBtn");
+      document.getElementById("openRegisterBtn").textContent = t("openRegisterBtn");
+      document.getElementById("loginCancelBtn").textContent = t("cancelBtn");
+      document.getElementById("registerCancelBtn").textContent = t("cancelBtn");
       document.getElementById("rememberLabel").textContent = t("rememberLabel");
       document.getElementById("regEmail").placeholder = t("regEmailPh");
       document.getElementById("regName").placeholder = t("regNamePh");
@@ -265,7 +308,7 @@
         document.getElementById("authRow").style.display = "none";
       } catch (_) {
         document.getElementById("loggedInPanel").style.display = "none";
-        document.getElementById("authRow").style.display = "grid";
+        document.getElementById("authRow").style.display = "block";
       }
     }
     async function register() {
@@ -297,7 +340,7 @@
     async function logout() {
       await api("/api/v1/auth/logout", "POST");
       document.getElementById("loggedInPanel").style.display = "none";
-      document.getElementById("authRow").style.display = "grid";
+      document.getElementById("authRow").style.display = "block";
       setMsg("");
     }
     async function safe(fn) { try { await fn(); } catch (e) { setMsg(mapError(e.message), true); } }
@@ -323,8 +366,24 @@
     document.getElementById("theme").addEventListener("change", (e) => { localStorage.setItem("mf_theme", e.target.value); applyTheme(e.target.value); });
     document.getElementById("detectTzBtn").addEventListener("click", () => { const tz = detectTz(); fillTz(tz); setMsg(`${t("tzDetected")}${tz}`); });
     document.getElementById("restoreBtn").addEventListener("click", () => safe(restore));
-    document.getElementById("regBtn").addEventListener("click", () => safe(register));
-    document.getElementById("loginBtn").addEventListener("click", () => safe(login));
+    document.getElementById("openLoginBtn").addEventListener("click", () => document.getElementById("loginDialog").showModal());
+    document.getElementById("openRegisterBtn").addEventListener("click", () => document.getElementById("registerDialog").showModal());
+    document.getElementById("loginCancelBtn").addEventListener("click", () => document.getElementById("loginDialog").close());
+    document.getElementById("registerCancelBtn").addEventListener("click", () => document.getElementById("registerDialog").close());
+    document.getElementById("registerForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      safe(async () => {
+        await register();
+        document.getElementById("registerDialog").close();
+      });
+    });
+    document.getElementById("loginForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      safe(async () => {
+        await login();
+        document.getElementById("loginDialog").close();
+      });
+    });
     document.getElementById("goDashboardBtn").addEventListener("click", async () => { await saveSettingsIfLoggedIn(); window.location.href = "/ui/dashboard"; });
     document.getElementById("logoutFirstBtn").addEventListener("click", () => safe(logout));
     document.getElementById("cookieNecessaryBtn").addEventListener("click", () => { localStorage.setItem("mf_cookie_consent", "necessary"); showCookieBannerIfNeeded(); });

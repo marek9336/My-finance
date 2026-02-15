@@ -170,3 +170,22 @@ Starsi zaznamy se bez vyzvy nemazou, pouze se pridavaji nove.
 - `backend/ui/dashboard.html`:
   - sekce kurzoveho snapshotu cte data z backend rates API misto `localStorage`.
 - Backup/export/import rozsireno o rates watchlist a snapshot data.
+
+## [0.3.1] - 2026-02-15
+### Changed
+- Navigace:
+  - prejmenovano `Transakce` na `Transakce a ucty`.
+- Rozpracovane sekce:
+  - doplnen indikator `⚠️` s tooltipem o stavu vyvoje na strankach `Sporeni a investice`, `Kurzy`, `Sluzby`,
+  - v `Nastaveni` oznaceny jako rozpracovane: `Poskytovatel kalendare`, `Synchronizace kalendare`, `SMTP`.
+- `backend/ui/rates.html`:
+  - odebrano manualni tlacitko refresh,
+  - pridano automaticke obnoveni kurzu po nacteni stranky a periodicky kazdych 15 minut.
+- `backend/ui/settings.html`:
+  - pridana pole `Vychozi mena` a `Sekundarni mena`,
+  - ulozeni men do app settings backendu.
+- `backend/ui/rates.html` a `backend/ui/dashboard.html`:
+  - prepocet cen do vychozi meny uzivatele,
+  - volitelne zobrazeni i v sekundarni mene.
+- `backend/app/schemas.py`, `backend/app/store.py`, `backend/app/persistence.py`:
+  - rozsireni app settings o `defaultDisplayCurrency` a `secondaryDisplayCurrency`.

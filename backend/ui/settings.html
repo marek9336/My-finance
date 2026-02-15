@@ -45,14 +45,16 @@
       <h2 id="generalTitle">General</h2>
       <div class="grid">
         <div><label id="labelLang" for="locale">Language</label><select id="locale"></select></div>
-        <div><label id="labelProvider" for="provider">Calendar provider</label><select id="provider"><option value="google">google</option><option value="none">none</option></select></div>
+        <div><label id="labelProvider" for="provider">Calendar provider</label><span class="dev-flag" id="devProvider" title="In development">⚠️</span><select id="provider"><option value="google">google</option><option value="none">none</option></select></div>
         <div><label id="labelTz" for="tz">Timezone</label><select id="tz"></select><button class="btn" id="detectTzBtn" type="button">Detect Timezone</button></div>
         <div><label id="labelTheme" for="theme">Appearance</label><select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
         <div><label id="labelLayout" for="layoutWidth">Layout width</label><select id="layoutWidth"><option value="full">Full width</option><option value="limited">Limited width</option></select></div>
+        <div><label id="labelPrimaryCurrency" for="primaryCurrency">Primary currency</label><input id="primaryCurrency" value="CZK" maxlength="3" /></div>
+        <div><label id="labelSecondaryCurrency" for="secondaryCurrency">Secondary currency</label><input id="secondaryCurrency" value="USD" maxlength="3" /></div>
       </div>
-      <div class="check"><input type="checkbox" id="syncEnabled"><label id="labelSync" for="syncEnabled">Calendar sync enabled</label></div>
+      <div class="check"><input type="checkbox" id="syncEnabled"><label id="labelSync" for="syncEnabled">Calendar sync enabled</label><span class="dev-flag" id="devSync" title="In development">⚠️</span></div>
       <div class="check"><input type="checkbox" id="registrationEnabled"><label id="labelReg" for="registrationEnabled">Self registration enabled</label></div>
-      <div class="check"><input type="checkbox" id="smtpEnabled"><label id="labelSmtp" for="smtpEnabled">SMTP enabled</label></div>
+      <div class="check"><input type="checkbox" id="smtpEnabled"><label id="labelSmtp" for="smtpEnabled">SMTP enabled</label><span class="dev-flag" id="devSmtp" title="In development">⚠️</span></div>
       <div class="grid"><div><label id="labelSessionTimeout" for="sessionTimeout">Auto logout</label><select id="sessionTimeout"><option value="5">5 min</option><option value="60">1 hour</option><option value="1440">1 day</option><option value="never">Never</option></select></div></div>
       <button id="saveGeneralBtn" type="button">Save Settings</button>
     </div>
@@ -121,6 +123,8 @@
       document.getElementById("generalTitle").textContent = t("settings.general", "General");
       document.getElementById("labelLang").textContent = t("common.language", "Language");
       document.getElementById("labelProvider").textContent = t("settings.calendar_provider", "Calendar provider");
+      document.getElementById("labelPrimaryCurrency").textContent = t("settings.primary_currency", "Primary currency");
+      document.getElementById("labelSecondaryCurrency").textContent = t("settings.secondary_currency", "Secondary currency");
       document.getElementById("labelTz").textContent = t("common.timezone", "Timezone");
       document.getElementById("detectTzBtn").textContent = t("common.detect_timezone", "Detect Timezone");
       document.getElementById("labelTheme").textContent = t("common.appearance", "Appearance");
@@ -154,6 +158,7 @@
       document.getElementById("accountTitle").textContent = t("settings.account", "Account");
       document.getElementById("accountDeleteInfo").textContent = t("settings.delete_account_info", "Deleting account removes all your data. You can create backup first.");
       document.getElementById("deleteAccountBtn").textContent = t("settings.delete_account", "Delete Account");
+      ["devProvider","devSync","devSmtp"].forEach((id)=>{ const el=document.getElementById(id); if(el) el.title = t("common.in_development","This part is still in development."); });
       const localeSel = document.getElementById("locale");
       localeSel.innerHTML = `<option value="en">English</option><option value="cs">Čeština</option>`;
     }
@@ -177,6 +182,8 @@
       document.getElementById("backupRetention").value = data.autoBackupRetentionDays || 30;
       document.getElementById("theme").value = localStorage.getItem("mf_theme") || "system";
       document.getElementById("layoutWidth").value = localStorage.getItem("mf_layout_width") || "full";
+      document.getElementById("primaryCurrency").value = data.defaultDisplayCurrency || "CZK";
+      document.getElementById("secondaryCurrency").value = data.secondaryDisplayCurrency || "USD";
       document.getElementById("sessionTimeout").value = data.sessionTimeoutMinutes ? String(data.sessionTimeoutMinutes) : "never";
       fillTimezoneSelect(data.defaultTimezone || detectSystemTimezone());
     }
@@ -186,6 +193,8 @@
       const payload = {
         defaultLocale: document.getElementById("locale").value,
         defaultTimezone: document.getElementById("tz").value,
+        defaultDisplayCurrency: (document.getElementById("primaryCurrency").value || "CZK").toUpperCase(),
+        secondaryDisplayCurrency: (document.getElementById("secondaryCurrency").value || "USD").toUpperCase(),
         calendarProvider: document.getElementById("provider").value,
         calendarSyncEnabled: document.getElementById("syncEnabled").checked,
         selfRegistrationEnabled: document.getElementById("registrationEnabled").checked,

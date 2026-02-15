@@ -145,6 +145,8 @@
     let allAccounts = [];
     let allTransactions = [];
     let ratesState = { watchlist: [], snapshots: {} };
+    let displayPrimary = "CZK";
+    let displaySecondary = "USD";
     let selectedPeriod = "month";
     let chartHitPoints = [];
 
@@ -384,7 +386,8 @@
     function renderRatesSnapshot() {
       const watch = ratesState.watchlist || [];
       const snapshot = ratesState.snapshots || {};
-      document.getElementById("ratesTable").innerHTML = `<thead><tr><th>${t("rates.symbol", "Asset/Pair")}</th><th>${t("rates.price", "Price")}</th><th>${t("rates.currency", "Currency")}</th><th>${t("rates.last_update", "Last update")}</th></tr></thead><tbody>${watch.map((symbol) => `<tr><td>${symbol}</td><td>${snapshot[symbol]?.price ?? "--"}</td><td>${snapshot[symbol]?.currency ?? "USD"}</td><td>${snapshot[symbol]?.updatedAt ?? t("rates.not_synced", "not synced")}</td></tr>`).join("")}</tbody>`;
+      const showSecondary = !!displaySecondary && displaySecondary !== displayPrimary;
+      document.getElementById("ratesTable").innerHTML = `<thead><tr><th>${t("rates.symbol", "Asset/Pair")}</th><th>${t("rates.price", "Price")} (${displayPrimary})</th>${showSecondary ? `<th>${t("rates.price", "Price")} (${displaySecondary})</th>` : ""}<th>${t("rates.last_update", "Last update")}</th></tr></thead><tbody>${watch.map((symbol) => { const row=snapshot[symbol]; const src=row?.currency||"USD"; const p1=convertCurrency(row?.price, src, displayPrimary, snapshot); const p2=showSecondary ? convertCurrency(row?.price, src, displaySecondary, snapshot) : null; return `<tr><td>${symbol}</td><td>${p1===null?"--":p1.toFixed(6)}</td>${showSecondary ? `<td>${p2===null?"--":p2.toFixed(6)}</td>` : ""}<td>${row?.updatedAt ?? t("rates.not_synced", "not synced")}</td></tr>`; }).join("")}</tbody>`;
     }
 
     function renderPeriodButtons() {
@@ -396,20 +399,44 @@
     }
 
     async function refreshAll() {
-      const [accounts, transactions, rates] = await Promise.all([
+      const [accounts, transactions, rates, settings] = await Promise.all([
         MFUI.api("/api/v1/accounts"),
         MFUI.api("/api/v1/transactions"),
         MFUI.api("/api/v1/rates").catch(() => ({ watchlist: [], snapshots: {} })),
+        MFUI.api("/api/v1/settings/app").catch(() => ({ defaultDisplayCurrency: "CZK", secondaryDisplayCurrency: "USD" })),
       ]);
       allAccounts = accounts;
       allTransactions = transactions;
       ratesState = rates || { watchlist: [], snapshots: {} };
+      displayPrimary = (settings.defaultDisplayCurrency || "CZK").toUpperCase();
+      displaySecondary = (settings.secondaryDisplayCurrency || "USD").toUpperCase();
       renderAccountBalances();
       drawMainChart();
       renderAccountCharts();
       renderStatisticsTables();
       renderRatesSnapshot();
       renderDebtAndServiceSections();
+    }
+
+    function toNum(v){ const n = Number(v); return Number.isFinite(n) ? n : null; }
+    function convertCurrency(value, src, target, snapshots){
+      const amount = toNum(value);
+      if (amount === null) return null;
+      const s = String(src || "").toUpperCase();
+      const tCur = String(target || "").toUpperCase();
+      if (!s || !tCur) return null;
+      if (s === tCur) return amount;
+      const direct = snapshots[`${s}/${tCur}`];
+      if (direct && String(direct.currency || "").toUpperCase() === tCur) {
+        const rate = toNum(direct.price);
+        if (rate && rate > 0) return amount * rate;
+      }
+      const inverse = snapshots[`${tCur}/${s}`];
+      if (inverse && String(inverse.currency || "").toUpperCase() === s) {
+        const rate = toNum(inverse.price);
+        if (rate && rate > 0) return amount / rate;
+      }
+      return null;
     }
 
     function bindChartHover() {

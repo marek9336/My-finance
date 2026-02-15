@@ -26,6 +26,8 @@ class InMemoryStore:
         self.settings: dict[str, object] = {
             "defaultLocale": "en",
             "defaultTimezone": "Europe/Prague",
+            "defaultDisplayCurrency": "CZK",
+            "secondaryDisplayCurrency": "USD",
             "calendarProvider": "google",
             "calendarSyncEnabled": True,
             "selfRegistrationEnabled": True,

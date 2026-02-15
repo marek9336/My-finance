@@ -15,6 +15,7 @@ window.MFUI = (function () {
     if (lower.includes("authentication required")) return t("error.auth_required", "Authentication required.");
     if (lower.includes("invalid email")) return t("error.invalid_email", "Invalid email format.");
     if (lower.includes("at least 8")) return t("error.password_min_8", "Password must have at least 8 characters.");
+    if (lower.includes("cannot set properties of null")) return t("error.ui_runtime", "Page rendering error. Please reload.");
     return text;
   }
 
@@ -164,5 +165,5 @@ window.MFUI = (function () {
     return () => clearInterval(timer);
   }
 
-  return { t, api, init, setMsg, applyTheme, applyLayout, periodicRefresh };
+  return { t, api, init, setMsg, applyTheme, applyLayout, periodicRefresh, formatError: localizeErrorMessage };
 })();
