@@ -1,6 +1,9 @@
 import json
 import asyncio
 import secrets
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
@@ -47,6 +50,12 @@ from .schemas import (
     PropertyCostResponse,
     PropertyCreate,
     PropertyResponse,
+    RateSnapshotItem,
+    RateSnapshotUpsert,
+    RatesRefreshRequest,
+    RatesRefreshResponse,
+    RatesStateResponse,
+    RatesWatchlistUpdate,
     RegisterRequest,
     TransactionCreate,
     TransactionCategoryStatsResponse,
@@ -274,6 +283,79 @@ async def publish_custom_locale(
     return LocalePublishResponse(locale=locale, path=str(file_path.relative_to(ROOT_DIR)), keys=len(custom))
 
 
+@app.get("/api/v1/rates", response_model=RatesStateResponse)
+async def get_rates_state(
+    authorization: str | None = Header(default=None),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> RatesStateResponse:
+    user_id = _require_user(authorization, session_token)
+    state = persistence.get_rates_state(user_id)
+    snapshots = {k: RateSnapshotItem(**v) for k, v in state.get("snapshots", {}).items()}
+    return RatesStateResponse(watchlist=state.get("watchlist", []), snapshots=snapshots)
+
+
+@app.put("/api/v1/rates/watchlist", response_model=RatesStateResponse)
+async def put_rates_watchlist(
+    payload: RatesWatchlistUpdate,
+    authorization: str | None = Header(default=None),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> RatesStateResponse:
+    user_id = _require_user(authorization, session_token)
+    state = persistence.update_rates_watchlist(user_id, payload)
+    snapshots = {k: RateSnapshotItem(**v) for k, v in state.get("snapshots", {}).items()}
+    return RatesStateResponse(watchlist=state.get("watchlist", []), snapshots=snapshots)
+
+
+@app.post("/api/v1/rates/snapshot", response_model=RatesStateResponse)
+async def post_rate_snapshot(
+    payload: RateSnapshotUpsert,
+    authorization: str | None = Header(default=None),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> RatesStateResponse:
+    user_id = _require_user(authorization, session_token)
+    state = persistence.upsert_rate_snapshot(user_id, payload)
+    snapshots = {k: RateSnapshotItem(**v) for k, v in state.get("snapshots", {}).items()}
+    return RatesStateResponse(watchlist=state.get("watchlist", []), snapshots=snapshots)
+
+
+@app.delete("/api/v1/rates/watchlist/{symbol}", response_model=RatesStateResponse)
+async def delete_rate_symbol(
+    symbol: str,
+    authorization: str | None = Header(default=None),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> RatesStateResponse:
+    user_id = _require_user(authorization, session_token)
+    state = persistence.delete_rate_symbol(user_id, symbol)
+    snapshots = {k: RateSnapshotItem(**v) for k, v in state.get("snapshots", {}).items()}
+    return RatesStateResponse(watchlist=state.get("watchlist", []), snapshots=snapshots)
+
+
+@app.post("/api/v1/rates/refresh", response_model=RatesRefreshResponse)
+async def refresh_rates(
+    payload: RatesRefreshRequest,
+    authorization: str | None = Header(default=None),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> RatesRefreshResponse:
+    user_id = _require_user(authorization, session_token)
+    current = persistence.get_rates_state(user_id)
+    symbols = payload.symbols if payload.symbols is not None else current.get("watchlist", [])
+    updated_raw, skipped = _refresh_rates_from_public_apis(symbols)
+    for item in updated_raw.values():
+        persistence.upsert_rate_snapshot(
+            user_id,
+            RateSnapshotUpsert(
+                symbol=item["symbol"],
+                price=item["price"],
+                currency=item["currency"],
+                source=item["source"],
+                updatedAt=item["updatedAt"],
+            ),
+        )
+    state = persistence.get_rates_state(user_id)
+    snapshots = {k: RateSnapshotItem(**v) for k, v in state.get("snapshots", {}).items()}
+    return RatesRefreshResponse(updated=sorted(updated_raw.keys()), skipped=skipped, snapshots=snapshots)
+
+
 @app.get("/ui/settings")
 async def ui_settings() -> FileResponse:
     return FileResponse(UI_DIR / "settings.html")
@@ -388,6 +470,93 @@ def _require_user(authorization: str | None = None, session_token: str | None = 
     if user_id is None:
         raise HTTPException(status_code=401, detail="invalid or expired token")
     return user_id
+
+
+CRYPTO_SYMBOL_MAP = {
+    "BTC": "bitcoin",
+    "ETH": "ethereum",
+    "SOL": "solana",
+    "SHIB": "shiba-inu",
+    "ADA": "cardano",
+    "DOGE": "dogecoin",
+}
+
+
+def _is_fx_pair(symbol: str) -> bool:
+    parts = symbol.split("/")
+    return len(parts) == 2 and all(len(p) == 3 and p.isalpha() for p in parts)
+
+
+def _http_get_json(url: str) -> dict[str, Any]:
+    req = urllib.request.Request(url, headers={"User-Agent": "my-finance/0.3"})
+    with urllib.request.urlopen(req, timeout=10) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _refresh_rates_from_public_apis(symbols: list[str]) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
+    updated: dict[str, dict[str, Any]] = {}
+    skipped: dict[str, str] = {}
+    now = datetime.now(timezone.utc)
+
+    crypto_symbols = [s for s in symbols if s in CRYPTO_SYMBOL_MAP]
+    if crypto_symbols:
+        ids = ",".join(CRYPTO_SYMBOL_MAP[s] for s in crypto_symbols)
+        q = urllib.parse.urlencode({"ids": ids, "vs_currencies": "usd"})
+        url = f"https://api.coingecko.com/api/v3/simple/price?{q}"
+        try:
+            data = _http_get_json(url)
+            for sym in crypto_symbols:
+                key = CRYPTO_SYMBOL_MAP[sym]
+                price = data.get(key, {}).get("usd")
+                if price is None:
+                    skipped[sym] = "no price in provider response"
+                    continue
+                updated[sym] = {
+                    "symbol": sym,
+                    "price": price,
+                    "currency": "USD",
+                    "source": "coingecko",
+                    "updatedAt": now,
+                }
+        except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+            for sym in crypto_symbols:
+                skipped[sym] = f"coingecko error: {exc}"
+
+    for sym in symbols:
+        if sym in updated or sym in CRYPTO_SYMBOL_MAP:
+            continue
+        if _is_fx_pair(sym):
+            base, quote = sym.split("/")
+            if base == quote:
+                updated[sym] = {
+                    "symbol": sym,
+                    "price": 1.0,
+                    "currency": quote,
+                    "source": "fx-static",
+                    "updatedAt": now,
+                }
+                continue
+            q = urllib.parse.urlencode({"from": base, "to": quote})
+            url = f"https://api.frankfurter.app/latest?{q}"
+            try:
+                data = _http_get_json(url)
+                rate = data.get("rates", {}).get(quote)
+                if rate is None:
+                    skipped[sym] = "no fx rate in provider response"
+                    continue
+                updated[sym] = {
+                    "symbol": sym,
+                    "price": rate,
+                    "currency": quote,
+                    "source": "frankfurter",
+                    "updatedAt": now,
+                }
+            except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+                skipped[sym] = f"frankfurter error: {exc}"
+            continue
+        skipped[sym] = "unsupported symbol for auto-refresh"
+
+    return updated, skipped
 
 
 def _transaction_response_from_row(row: dict[str, Any]) -> TransactionResponse:

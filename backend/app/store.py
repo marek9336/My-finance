@@ -21,6 +21,8 @@ class InMemoryStore:
         self.notification_rules: dict[UUID, dict] = {}
         self.notification_deliveries: dict[UUID, dict] = {}
         self.calendar_events: dict[str, dict] = {}
+        self.rate_watchlists: dict[UUID, list[str]] = {}
+        self.rate_snapshots: dict[UUID, dict[str, dict]] = {}
         self.settings: dict[str, object] = {
             "defaultLocale": "en",
             "defaultTimezone": "Europe/Prague",

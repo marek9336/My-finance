@@ -144,6 +144,7 @@
   <script>
     let allAccounts = [];
     let allTransactions = [];
+    let ratesState = { watchlist: [], snapshots: {} };
     let selectedPeriod = "month";
     let chartHitPoints = [];
 
@@ -381,11 +382,9 @@
     }
 
     function renderRatesSnapshot() {
-      const defaults = ["BTC", "ETH", "SOL", "SHIB", "ADA", "DOGE", "USD/CZK", "EUR/CZK"];
-      const configured = JSON.parse(localStorage.getItem("mf_rates_watch") || "[]");
-      const all = [...new Set([...defaults, ...configured])];
-      const snapshot = JSON.parse(localStorage.getItem("mf_rates_snapshot") || "{}");
-      document.getElementById("ratesTable").innerHTML = `<thead><tr><th>${t("rates.symbol", "Asset/Pair")}</th><th>${t("rates.price", "Price")}</th><th>${t("rates.currency", "Currency")}</th><th>${t("rates.last_update", "Last update")}</th></tr></thead><tbody>${all.map((symbol) => `<tr><td>${symbol}</td><td>${snapshot[symbol]?.price ?? "--"}</td><td>${snapshot[symbol]?.currency ?? "USD"}</td><td>${snapshot[symbol]?.updatedAt ?? t("rates.not_synced", "not synced")}</td></tr>`).join("")}</tbody>`;
+      const watch = ratesState.watchlist || [];
+      const snapshot = ratesState.snapshots || {};
+      document.getElementById("ratesTable").innerHTML = `<thead><tr><th>${t("rates.symbol", "Asset/Pair")}</th><th>${t("rates.price", "Price")}</th><th>${t("rates.currency", "Currency")}</th><th>${t("rates.last_update", "Last update")}</th></tr></thead><tbody>${watch.map((symbol) => `<tr><td>${symbol}</td><td>${snapshot[symbol]?.price ?? "--"}</td><td>${snapshot[symbol]?.currency ?? "USD"}</td><td>${snapshot[symbol]?.updatedAt ?? t("rates.not_synced", "not synced")}</td></tr>`).join("")}</tbody>`;
     }
 
     function renderPeriodButtons() {
@@ -397,12 +396,14 @@
     }
 
     async function refreshAll() {
-      const [accounts, transactions] = await Promise.all([
+      const [accounts, transactions, rates] = await Promise.all([
         MFUI.api("/api/v1/accounts"),
         MFUI.api("/api/v1/transactions"),
+        MFUI.api("/api/v1/rates").catch(() => ({ watchlist: [], snapshots: {} })),
       ]);
       allAccounts = accounts;
       allTransactions = transactions;
+      ratesState = rates || { watchlist: [], snapshots: {} };
       renderAccountBalances();
       drawMainChart();
       renderAccountCharts();

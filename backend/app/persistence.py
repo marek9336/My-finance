@@ -25,6 +25,8 @@ from .schemas import (
     NotificationRuleCreate,
     PropertyCostCreate,
     PropertyCreate,
+    RateSnapshotUpsert,
+    RatesWatchlistUpdate,
     TransactionCategoryStatsResponse,
     TransactionCategoryRename,
     TransactionCreate,
@@ -123,6 +125,18 @@ class Persistence:
     def upsert_custom_locale(self, user_id: UUID, locale: str, payload: dict[str, str]) -> dict[str, str]:
         raise NotImplementedError
 
+    def get_rates_state(self, user_id: UUID) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def update_rates_watchlist(self, user_id: UUID, payload: RatesWatchlistUpdate) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def upsert_rate_snapshot(self, user_id: UUID, payload: RateSnapshotUpsert) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def delete_rate_symbol(self, user_id: UUID, symbol: str) -> dict[str, Any]:
+        raise NotImplementedError
+
     def create_account(self, user_id: UUID, payload: AccountCreate) -> dict[str, Any]:
         raise NotImplementedError
 
@@ -185,6 +199,43 @@ class InMemoryPersistence(Persistence):
             store.custom_locales[locale] = {}
         store.custom_locales[locale].update(payload)
         return self.get_locale_bundle(user_id, locale)
+
+    def get_rates_state(self, user_id: UUID) -> dict[str, Any]:
+        watch = store.rate_watchlists.get(user_id, [])
+        snaps = store.rate_snapshots.get(user_id, {})
+        return {"watchlist": watch, "snapshots": snaps}
+
+    def update_rates_watchlist(self, user_id: UUID, payload: RatesWatchlistUpdate) -> dict[str, Any]:
+        watch = payload.symbols
+        store.rate_watchlists[user_id] = watch
+        existing = store.rate_snapshots.get(user_id, {})
+        store.rate_snapshots[user_id] = {sym: existing[sym] for sym in watch if sym in existing}
+        return self.get_rates_state(user_id)
+
+    def upsert_rate_snapshot(self, user_id: UUID, payload: RateSnapshotUpsert) -> dict[str, Any]:
+        sym = payload.symbol
+        if user_id not in store.rate_watchlists:
+            store.rate_watchlists[user_id] = []
+        if sym not in store.rate_watchlists[user_id]:
+            store.rate_watchlists[user_id].append(sym)
+        if user_id not in store.rate_snapshots:
+            store.rate_snapshots[user_id] = {}
+        store.rate_snapshots[user_id][sym] = {
+            "symbol": sym,
+            "price": payload.price,
+            "currency": payload.currency,
+            "source": payload.source,
+            "updatedAt": payload.updatedAt or datetime.utcnow(),
+        }
+        return self.get_rates_state(user_id)
+
+    def delete_rate_symbol(self, user_id: UUID, symbol: str) -> dict[str, Any]:
+        sym = symbol.strip().upper()
+        watch = store.rate_watchlists.get(user_id, [])
+        store.rate_watchlists[user_id] = [s for s in watch if s != sym]
+        if user_id in store.rate_snapshots and sym in store.rate_snapshots[user_id]:
+            del store.rate_snapshots[user_id][sym]
+        return self.get_rates_state(user_id)
 
     def create_vehicle(self, payload: VehicleCreate) -> dict[str, Any]:
         entity_id = uuid4()
@@ -341,6 +392,8 @@ class InMemoryPersistence(Persistence):
             "notificationRules": len(store.notification_rules),
             "notificationDeliveries": len(store.notification_deliveries),
             "calendarEvents": len(store.calendar_events),
+            "rateWatchlists": len(store.rate_watchlists),
+            "rateSnapshotsUsers": len(store.rate_snapshots),
         }
 
     def export_backup(self, user_id: UUID) -> dict[str, Any]:
@@ -362,6 +415,8 @@ class InMemoryPersistence(Persistence):
                 "userCredentials": [{"user_id": uid, "password_hash": pwd_hash} for uid, pwd_hash in store.user_credentials.items() if uid == user_id],
                 "accounts": [a for a in store.accounts.values() if a.get("user_id") == user_id],
                 "transactions": [t for t in store.transactions.values() if t.get("user_id") == user_id],
+                "rateWatchlist": store.rate_watchlists.get(user_id, []),
+                "rateSnapshots": list(store.rate_snapshots.get(user_id, {}).values()),
                 "vehicles": [v for v in store.vehicles.values() if v.get("user_id") == user_id],
                 "vehicleServices": [vs for vs in store.vehicle_services.values() if vs.get("vehicle_id") in vehicle_ids],
                 "vehicleServiceRules": [vr for vr in store.vehicle_service_rules.values() if vr.get("vehicle_id") in vehicle_ids],
@@ -401,6 +456,21 @@ class InMemoryPersistence(Persistence):
             store.user_credentials[UUID(str(uid))] = row.get("password_hash", "")
         store.accounts = map_by_id(data.get("accounts", []))
         store.transactions = map_by_id(data.get("transactions", []))
+        store.rate_watchlists[user_id] = [str(s).strip().upper() for s in data.get("rateWatchlist", []) if str(s).strip()]
+        store.rate_snapshots[user_id] = {}
+        for row in data.get("rateSnapshots", []):
+            if not isinstance(row, dict):
+                continue
+            sym = str(row.get("symbol", "")).strip().upper()
+            if not sym:
+                continue
+            store.rate_snapshots[user_id][sym] = {
+                "symbol": sym,
+                "price": row.get("price"),
+                "currency": str(row.get("currency", "USD")).strip().upper(),
+                "source": str(row.get("source", "manual")).strip().lower(),
+                "updatedAt": row.get("updatedAt") or row.get("updated_at") or datetime.utcnow(),
+            }
         store.vehicles = map_by_id(data.get("vehicles", []))
         store.vehicle_services = map_by_id(data.get("vehicleServices", []))
         store.vehicle_service_rules = map_by_id(data.get("vehicleServiceRules", []))
@@ -748,6 +818,10 @@ class InMemoryPersistence(Persistence):
         store.calendar_events = {
             k: v for k, v in store.calendar_events.items() if v.get("calendar_integration_id") not in integration_ids
         }
+        if user_id in store.rate_watchlists:
+            del store.rate_watchlists[user_id]
+        if user_id in store.rate_snapshots:
+            del store.rate_snapshots[user_id]
 
 
 class PostgresPersistence(Persistence):
@@ -826,6 +900,38 @@ class PostgresPersistence(Persistence):
               add column if not exists recurring_weekend_policy text
             """
         )
+
+    def _ensure_rates_tables(self) -> None:
+        self._run(
+            """
+            create table if not exists rate_assets (
+              id uuid primary key default gen_random_uuid(),
+              user_id uuid not null references users(id) on delete cascade,
+              symbol text not null,
+              created_at timestamptz not null default now(),
+              updated_at timestamptz not null default now(),
+              unique (user_id, symbol)
+            )
+            """
+        )
+        self._run(
+            """
+            create table if not exists rate_snapshots (
+              id uuid primary key default gen_random_uuid(),
+              user_id uuid not null references users(id) on delete cascade,
+              symbol text not null,
+              price numeric(30,10) not null,
+              currency text not null default 'USD',
+              source text not null default 'manual',
+              last_updated_at timestamptz not null,
+              created_at timestamptz not null default now(),
+              updated_at timestamptz not null default now(),
+              unique (user_id, symbol)
+            )
+            """
+        )
+        self._run("create index if not exists idx_rate_assets_user on rate_assets(user_id, symbol)")
+        self._run("create index if not exists idx_rate_snapshots_user on rate_snapshots(user_id, symbol)")
 
     def get_app_settings(self, user_id: UUID) -> AppSettings:
         self._ensure_app_settings_columns()
@@ -951,6 +1057,96 @@ class PostgresPersistence(Persistence):
                 },
             )
         return self.get_locale_bundle(user_id, locale)
+
+    def get_rates_state(self, user_id: UUID) -> dict[str, Any]:
+        self._ensure_rates_tables()
+        watch_rows = self._run(
+            "select symbol from rate_assets where user_id = :user_id order by symbol asc",
+            {"user_id": user_id},
+        )
+        snap_rows = self._run(
+            """
+            select symbol, price, currency, source, last_updated_at
+            from rate_snapshots
+            where user_id = :user_id
+            """,
+            {"user_id": user_id},
+        )
+        snapshots = {
+            row["symbol"]: {
+                "symbol": row["symbol"],
+                "price": row["price"],
+                "currency": row["currency"],
+                "source": row["source"],
+                "updatedAt": row["last_updated_at"],
+            }
+            for row in snap_rows
+        }
+        return {"watchlist": [r["symbol"] for r in watch_rows], "snapshots": snapshots}
+
+    def update_rates_watchlist(self, user_id: UUID, payload: RatesWatchlistUpdate) -> dict[str, Any]:
+        self._ensure_rates_tables()
+        symbols = payload.symbols
+        for sym in symbols:
+            self._run(
+                """
+                insert into rate_assets (id, user_id, symbol, created_at, updated_at)
+                values (:id, :user_id, :symbol, now(), now())
+                on conflict (user_id, symbol)
+                do update set updated_at = now()
+                """,
+                {"id": str(uuid4()), "user_id": user_id, "symbol": sym},
+            )
+        if symbols:
+            self._run(
+                "delete from rate_assets where user_id = :user_id and symbol <> all(:symbols)",
+                {"user_id": user_id, "symbols": symbols},
+            )
+            self._run(
+                "delete from rate_snapshots where user_id = :user_id and symbol <> all(:symbols)",
+                {"user_id": user_id, "symbols": symbols},
+            )
+        else:
+            self._run("delete from rate_assets where user_id = :user_id", {"user_id": user_id})
+            self._run("delete from rate_snapshots where user_id = :user_id", {"user_id": user_id})
+        return self.get_rates_state(user_id)
+
+    def upsert_rate_snapshot(self, user_id: UUID, payload: RateSnapshotUpsert) -> dict[str, Any]:
+        self._ensure_rates_tables()
+        self._run(
+            """
+            insert into rate_assets (id, user_id, symbol, created_at, updated_at)
+            values (:id, :user_id, :symbol, now(), now())
+            on conflict (user_id, symbol)
+            do update set updated_at = now()
+            """,
+            {"id": str(uuid4()), "user_id": user_id, "symbol": payload.symbol},
+        )
+        self._run(
+            """
+            insert into rate_snapshots (id, user_id, symbol, price, currency, source, last_updated_at, created_at, updated_at)
+            values (:id, :user_id, :symbol, :price, :currency, :source, :last_updated_at, now(), now())
+            on conflict (user_id, symbol)
+            do update set price = excluded.price, currency = excluded.currency, source = excluded.source, last_updated_at = excluded.last_updated_at, updated_at = now()
+            """,
+            {
+                "id": str(uuid4()),
+                "user_id": user_id,
+                "symbol": payload.symbol,
+                "price": _to_float(payload.price),
+                "currency": payload.currency,
+                "source": payload.source,
+                "last_updated_at": payload.updatedAt or datetime.utcnow(),
+            },
+        )
+        return self.get_rates_state(user_id)
+
+    def delete_rate_symbol(self, user_id: UUID, symbol: str) -> dict[str, Any]:
+        self._ensure_rates_tables()
+        sym = symbol.strip().upper()
+        self._run("delete from rate_snapshots where user_id = :user_id and symbol = :symbol", {"user_id": user_id, "symbol": sym})
+        self._run("delete from rate_assets where user_id = :user_id and symbol = :symbol", {"user_id": user_id, "symbol": sym})
+        return self.get_rates_state(user_id)
 
     def create_vehicle(self, payload: VehicleCreate) -> dict[str, Any]:
         row = self._run(
@@ -1215,6 +1411,7 @@ class PostgresPersistence(Persistence):
         )
 
     def debug_counts(self) -> dict[str, int]:
+        self._ensure_rates_tables()
         queries = {
             "users": "select count(*) as c from users",
             "accounts": "select count(*) as c from accounts where user_id = :user_id",
@@ -1230,6 +1427,8 @@ class PostgresPersistence(Persistence):
             "notificationRules": "select count(*) as c from notification_rules where user_id = :user_id",
             "notificationDeliveries": "select count(*) as c from notification_deliveries nd join notification_rules nr on nr.id = nd.notification_rule_id where nr.user_id = :user_id",
             "calendarEvents": "select count(*) as c from calendar_events ce join calendar_integrations ci on ci.id = ce.calendar_integration_id where ci.user_id = :user_id",
+            "rateAssets": "select count(*) as c from rate_assets where user_id = :user_id",
+            "rateSnapshots": "select count(*) as c from rate_snapshots where user_id = :user_id",
         }
         out: dict[str, int] = {}
         for key, query in queries.items():
@@ -1254,6 +1453,11 @@ class PostgresPersistence(Persistence):
                 "userCredentials": self._run("select user_id, password_hash, created_at, updated_at from user_credentials where user_id = :user_id", {"user_id": user_id}),
                 "accounts": self._run("select * from accounts where user_id = :user_id order by created_at", {"user_id": user_id}),
                 "transactions": self._run("select * from transactions where user_id = :user_id order by created_at", {"user_id": user_id}),
+                "rateWatchlist": [row["symbol"] for row in self._run("select symbol from rate_assets where user_id = :user_id order by symbol", {"user_id": user_id})],
+                "rateSnapshots": self._run(
+                    "select symbol, price, currency, source, last_updated_at as updated_at from rate_snapshots where user_id = :user_id order by symbol",
+                    {"user_id": user_id},
+                ),
                 "vehicles": self._run("select * from vehicles where user_id = :user_id order by created_at", {"user_id": user_id}),
                 "vehicleServices": self._run(
                     """
@@ -1325,6 +1529,7 @@ class PostgresPersistence(Persistence):
     def import_backup(self, user_id: UUID, payload: dict[str, Any]) -> dict[str, int]:
         self._ensure_auth_columns()
         self._ensure_app_settings_columns()
+        self._ensure_rates_tables()
         data = payload.get("data", {})
         with self.engine.begin() as conn:
             conn.execute(
@@ -1334,6 +1539,8 @@ class PostgresPersistence(Persistence):
             cleanup_sql = [
                 "delete from transactions where user_id = :user_id",
                 "delete from accounts where user_id = :user_id",
+                "delete from rate_snapshots where user_id = :user_id",
+                "delete from rate_assets where user_id = :user_id",
                 "delete from calendar_events ce using calendar_integrations ci where ce.calendar_integration_id = ci.id and ci.user_id = :user_id",
                 "delete from notification_deliveries nd using notification_rules nr where nd.notification_rule_id = nr.id and nr.user_id = :user_id",
                 "delete from notification_rules where user_id = :user_id",
@@ -1475,6 +1682,55 @@ class PostgresPersistence(Persistence):
                 ],
                 True,
             )
+            rate_watch = [str(s).strip().upper() for s in data.get("rateWatchlist", []) if str(s).strip()]
+            for sym in rate_watch:
+                conn.execute(
+                    text(
+                        """
+                        insert into rate_assets (id, user_id, symbol, created_at, updated_at)
+                        values (:id, :user_id, :symbol, now(), now())
+                        on conflict (user_id, symbol)
+                        do update set updated_at = now()
+                        """
+                    ),
+                    {"id": str(uuid4()), "user_id": user_id, "symbol": sym},
+                )
+            for row in data.get("rateSnapshots", []):
+                if not isinstance(row, dict):
+                    continue
+                sym = str(row.get("symbol", "")).strip().upper()
+                if not sym:
+                    continue
+                conn.execute(
+                    text(
+                        """
+                        insert into rate_assets (id, user_id, symbol, created_at, updated_at)
+                        values (:id, :user_id, :symbol, now(), now())
+                        on conflict (user_id, symbol)
+                        do update set updated_at = now()
+                        """
+                    ),
+                    {"id": str(uuid4()), "user_id": user_id, "symbol": sym},
+                )
+                conn.execute(
+                    text(
+                        """
+                        insert into rate_snapshots (id, user_id, symbol, price, currency, source, last_updated_at, created_at, updated_at)
+                        values (:id, :user_id, :symbol, :price, :currency, :source, :last_updated_at, now(), now())
+                        on conflict (user_id, symbol)
+                        do update set price = excluded.price, currency = excluded.currency, source = excluded.source, last_updated_at = excluded.last_updated_at, updated_at = now()
+                        """
+                    ),
+                    {
+                        "id": str(uuid4()),
+                        "user_id": user_id,
+                        "symbol": sym,
+                        "price": row.get("price"),
+                        "currency": str(row.get("currency", "USD")).strip().upper(),
+                        "source": str(row.get("source", "manual")).strip().lower(),
+                        "last_updated_at": row.get("updatedAt") or row.get("updated_at") or datetime.utcnow(),
+                    },
+                )
             insert_rows("vehicle_services", data.get("vehicleServices", []), ["id", "vehicle_id", "service_type", "service_at", "odometer_km", "total_cost", "currency", "vendor", "description", "receipt_url"])
             insert_rows("vehicle_service_rules", data.get("vehicleServiceRules", []), ["id", "vehicle_id", "service_type", "interval_value", "interval_unit", "lead_days", "last_service_id", "next_due_date", "next_due_odometer_km", "is_active"])
             insert_rows("properties", data.get("properties", []), ["id", "user_id", "type", "name", "address_line1", "city", "postal_code", "country_code", "acquired_at", "purchase_price", "purchase_currency", "estimated_value", "estimated_value_currency", "estimated_value_updated_at", "floor_area_m2", "land_area_m2", "notes"], True)

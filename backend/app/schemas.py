@@ -351,6 +351,88 @@ class AppSettingsUpdate(BaseModel):
     sessionTimeoutMinutes: Optional[int] = Field(default=None, ge=1)
 
 
+class RatesWatchlistUpdate(BaseModel):
+    symbols: list[str] = Field(default_factory=list)
+
+    @field_validator("symbols")
+    @classmethod
+    def validate_symbols(cls, value: list[str]) -> list[str]:
+        out: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            sym = str(raw or "").strip().upper()
+            if not sym:
+                continue
+            if sym in seen:
+                continue
+            seen.add(sym)
+            out.append(sym)
+        return out
+
+
+class RateSnapshotUpsert(BaseModel):
+    symbol: str = Field(min_length=1, max_length=40)
+    price: Decimal = Field(gt=Decimal("0"))
+    currency: str = Field(default="USD", min_length=1, max_length=10)
+    source: str = Field(default="manual", min_length=1, max_length=40)
+    updatedAt: Optional[datetime] = None
+
+    @field_validator("symbol")
+    @classmethod
+    def validate_symbol(cls, value: str) -> str:
+        return value.strip().upper()
+
+    @field_validator("currency")
+    @classmethod
+    def validate_rate_currency(cls, value: str) -> str:
+        return value.strip().upper()
+
+    @field_validator("source")
+    @classmethod
+    def validate_source(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class RatesRefreshRequest(BaseModel):
+    symbols: Optional[list[str]] = None
+
+    @field_validator("symbols")
+    @classmethod
+    def validate_refresh_symbols(cls, value: Optional[list[str]]) -> Optional[list[str]]:
+        if value is None:
+            return None
+        out: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            sym = str(raw or "").strip().upper()
+            if not sym:
+                continue
+            if sym in seen:
+                continue
+            seen.add(sym)
+            out.append(sym)
+        return out
+
+
+class RateSnapshotItem(BaseModel):
+    symbol: str
+    price: Decimal
+    currency: str
+    source: str
+    updatedAt: datetime
+
+
+class RatesStateResponse(BaseModel):
+    watchlist: list[str]
+    snapshots: dict[str, RateSnapshotItem]
+
+
+class RatesRefreshResponse(BaseModel):
+    updated: list[str]
+    skipped: dict[str, str]
+    snapshots: dict[str, RateSnapshotItem]
+
+
 class LocaleListResponse(BaseModel):
     locales: list[str]
 

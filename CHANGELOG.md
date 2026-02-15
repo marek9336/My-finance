@@ -149,3 +149,24 @@ Starsi zaznamy se bez vyzvy nemazou, pouze se pridavaji nove.
   - sekce Transakce: ikona `✏️` otevre modal editace, ulozeni `✅`, zruseni `❌`.
 - `i18n/locales/cs.json`, `i18n/locales/en.json`:
   - doplneny nove klice pro graf a rozsirene funkce stranky Transakce.
+
+## [0.3.0] - 2026-02-15
+### Added
+- Nove backend API pro kurzy:
+  - `GET /api/v1/rates` (stav watchlistu + snapshotu),
+  - `PUT /api/v1/rates/watchlist` (ulozeni watchlistu),
+  - `POST /api/v1/rates/snapshot` (manualni ulozeni ceny),
+  - `DELETE /api/v1/rates/watchlist/{symbol}` (odebrani symbolu),
+  - `POST /api/v1/rates/refresh` (serverovy refresh cen z verejnych API).
+- Datove modely pro rates v `backend/app/schemas.py`.
+- Persistence vrstvy pro rates v memory i postgres backendu (`backend/app/persistence.py`).
+- Ukladani rates dat do in-memory store (`backend/app/store.py`).
+
+### Changed
+- `backend/ui/rates.html`:
+  - odstraneno ukladani do `localStorage`,
+  - stranka je plne napojena na backend rates API,
+  - pridano tlacitko serveroveho refreshe kurzu.
+- `backend/ui/dashboard.html`:
+  - sekce kurzoveho snapshotu cte data z backend rates API misto `localStorage`.
+- Backup/export/import rozsireno o rates watchlist a snapshot data.
