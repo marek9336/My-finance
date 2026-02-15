@@ -299,6 +299,76 @@ async def ui_dashboard() -> FileResponse:
     return FileResponse(UI_DIR / "dashboard.html")
 
 
+@app.get("/ui/common.css")
+async def ui_common_css() -> FileResponse:
+    return FileResponse(UI_DIR / "common.css")
+
+
+@app.get("/ui/common.js")
+async def ui_common_js() -> FileResponse:
+    return FileResponse(UI_DIR / "common.js")
+
+
+@app.get("/ui/transactions")
+async def ui_transactions() -> FileResponse:
+    return FileResponse(UI_DIR / "transactions.html")
+
+
+@app.get("/ui/services")
+async def ui_services() -> FileResponse:
+    return FileResponse(UI_DIR / "services.html")
+
+
+@app.get("/ui/savings-investments")
+async def ui_savings_investments() -> FileResponse:
+    return FileResponse(UI_DIR / "savings-investments.html")
+
+
+@app.get("/ui/rates")
+async def ui_rates() -> FileResponse:
+    return FileResponse(UI_DIR / "rates.html")
+
+
+@app.get("/ui/collections")
+async def ui_collections() -> FileResponse:
+    return FileResponse(UI_DIR / "collections.html")
+
+
+@app.get("/ui/garage")
+async def ui_garage() -> FileResponse:
+    return FileResponse(UI_DIR / "garage.html")
+
+
+@app.get("/ui/properties")
+async def ui_properties() -> FileResponse:
+    return FileResponse(UI_DIR / "properties.html")
+
+
+@app.get("/ui/devices")
+async def ui_devices() -> FileResponse:
+    return FileResponse(UI_DIR / "devices.html")
+
+
+@app.get("/ui/notes")
+async def ui_notes() -> FileResponse:
+    return FileResponse(UI_DIR / "notes.html")
+
+
+@app.get("/ui/calculators")
+async def ui_calculators() -> FileResponse:
+    return FileResponse(UI_DIR / "calculators.html")
+
+
+@app.get("/ui/health")
+async def ui_health() -> FileResponse:
+    return FileResponse(UI_DIR / "health.html")
+
+
+@app.get("/ui/exercise")
+async def ui_exercise() -> FileResponse:
+    return FileResponse(UI_DIR / "exercise.html")
+
+
 def _token_from_header(authorization: str | None) -> str:
     if not authorization:
         raise HTTPException(status_code=401, detail="missing Authorization header")

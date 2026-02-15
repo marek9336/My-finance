@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Finance - Calculators</title>
+  <link rel="stylesheet" href="/ui/common.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="topbar">
+        <div class="top-left">
+          <h1 id="title">Calculators</h1>
+          <p id="subtitle">Page skeleton is ready. Feature implementation follows roadmap.</p>
+          <div class="menu-row">
+            <a href="/ui/dashboard" id="navOverview">Overview</a>
+            <a href="/ui/transactions" id="navTransactions">Transactions</a>
+            <a href="/ui/savings-investments" id="navInvestments">Savings & Investments</a>
+            <a href="/ui/rates" id="navRates">Rates</a>
+            <a href="/ui/services" id="navServices">Services</a>
+            <a href="/ui/settings" id="navSettings">Settings</a>
+          </div>
+        </div>
+        <div class="top-actions">
+          <div class="user-menu">
+            <button id="userBtn" type="button">...</button>
+            <div class="dropdown" id="userMenu">
+              <a href="/ui/settings" id="menuSettingsLink">Settings</a>
+              <button id="logoutBtn" class="logout" type="button">Logout</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="msg" class="msg"></div>
+    </div>
+
+    <div class="card">
+      <h3 id="scopeTitle">Planned Scope</h3>
+      <ul>
+        <li id="li1">Data model and API wiring</li>
+        <li id="li2">Primary tables and forms</li>
+        <li id="li3">Cross-linking with transactions</li>
+        <li id="li4">Edit/delete/autosave behavior</li>
+      </ul>
+    </div>
+
+    <footer id="footerText">Copyright (c) My-Finance. Experimental software. Verify data and recommendations before acting.</footer>
+  </div>
+
+  <script src="/ui/common.js"></script>
+  <script>
+    (async()=>{
+      await MFUI.init();
+      const t=(k,f='')=>MFUI.t(k,f);
+      document.title=t('page.calculators.title','Calculators');
+      document.getElementById('title').textContent=t('page.calculators.title','Calculators');
+      document.getElementById('subtitle').textContent=t('page.common.subtitle','Page skeleton is ready. Feature implementation follows roadmap.');
+      document.getElementById('scopeTitle').textContent=t('page.common.scope','Planned Scope');
+      document.getElementById('li1').textContent=t('page.common.li1','Data model and API wiring');
+      document.getElementById('li2').textContent=t('page.common.li2','Primary tables and forms');
+      document.getElementById('li3').textContent=t('page.common.li3','Cross-linking with transactions');
+      document.getElementById('li4').textContent=t('page.common.li4','Edit/delete/autosave behavior');
+      const activeMap={
+        services:'/ui/services',
+        investments:'/ui/savings-investments'
+      };
+      const nav=document.querySelector('a[href="/ui/calculators"]');
+      if(nav) nav.classList.add('active');
+    })().catch((e)=>MFUI.setMsg(String(e.message||e),true));
+  </script>
+</body>
+</html>

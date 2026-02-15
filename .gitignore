@@ -35,9 +35,12 @@ pnpm-debug.log*
 *.sqlite-journal
 *.sql
 <<<<<<< ours
+<<<<<<< ours
 !db/
 !db/migrations/
 !db/migrations/*.sql
+=======
+>>>>>>> theirs
 =======
 >>>>>>> theirs
 /data/
@@ -64,8 +67,11 @@ __pycache__/
 docker-compose.override.yml
 *.local.yml
 <<<<<<< ours
+<<<<<<< ours
 
 # Local planning
 TODO.md
+=======
+>>>>>>> theirs
 =======
 >>>>>>> theirs

@@ -136,8 +136,14 @@ class InMemoryStore:
 
     def _load_locales_from_files(self) -> dict[str, dict[str, str]]:
         fallback = self._fallback_locales()
-        root = Path(__file__).resolve().parents[2]
-        locales_dir = root / "i18n" / "locales"
+        # Support both local repo layout and Docker runtime layout.
+        current = Path(__file__).resolve()
+        candidates = [
+            current.parents[2] / "i18n" / "locales",  # repo root
+            current.parents[1] / "i18n" / "locales",  # /app/i18n/locales
+            Path("/app/i18n/locales"),                # explicit docker path
+        ]
+        locales_dir = next((p for p in candidates if p.exists()), candidates[0])
         loaded: dict[str, dict[str, str]] = {}
         for locale in fallback.keys():
             file_path = locales_dir / f"{locale}.json"

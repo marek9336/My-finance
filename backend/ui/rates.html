@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Finance - Rates</title>
+  <link rel="stylesheet" href="/ui/common.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="topbar">
+        <div class="top-left">
+          <h1 id="title">Rates</h1>
+          <p id="subtitle">Configure visible symbols and manual fallback values.</p>
+          <div class="menu-row">
+            <a href="/ui/dashboard" id="navOverview">Overview</a>
+            <a href="/ui/transactions" id="navTransactions">Transactions</a>
+            <a href="/ui/savings-investments" id="navInvestments">Savings & Investments</a>
+            <a class="active" href="/ui/rates" id="navRates">Rates</a>
+            <a href="/ui/services" id="navServices">Services</a>
+            <a href="/ui/settings" id="navSettings">Settings</a>
+          </div>
+        </div>
+        <div class="top-actions">
+          <div class="user-menu">
+            <button id="userBtn" type="button">...</button>
+            <div class="dropdown" id="userMenu">
+              <a href="/ui/settings" id="menuSettingsLink">Settings</a>
+              <button id="logoutBtn" class="logout" type="button">Logout</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="msg" class="msg"></div>
+    </div>
+
+    <div class="card grid">
+      <div>
+        <h3 id="watchTitle">Watchlist</h3>
+        <div class="menu-row">
+          <input id="symbolInput" placeholder="BTC or USD/CZK" />
+          <button id="addSymbolBtn" type="button">Add</button>
+        </div>
+      </div>
+      <div>
+        <h3 id="manualTitle">Manual Snapshot</h3>
+        <div class="menu-row">
+          <select id="snapshotSymbol"></select>
+          <input id="snapshotPrice" type="number" step="0.00000001" placeholder="Price" />
+          <input id="snapshotCurrency" value="USD" placeholder="Currency" />
+          <button id="saveSnapshotBtn" type="button">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 id="configuredTitle">Configured Symbols</h3>
+      <div style="overflow:auto;"><table id="ratesTable"></table></div>
+    </div>
+
+    <footer id="footerText">Copyright (c) My-Finance. Experimental software. Verify data and recommendations before acting.</footer>
+  </div>
+
+  <script src="/ui/common.js"></script>
+  <script>
+    const t = (k, f="") => MFUI.t(k, f);
+
+    function defaults(){ return ["BTC","ETH","SOL","SHIB","ADA","DOGE","USD/CZK","EUR/CZK"]; }
+    function getWatch(){ return [...new Set([...(defaults()), ...JSON.parse(localStorage.getItem("mf_rates_watch")||"[]")])]; }
+    function setWatch(list){ localStorage.setItem("mf_rates_watch", JSON.stringify([...new Set(list.map((x)=>String(x||"").trim().toUpperCase()).filter(Boolean))])); }
+    function getSnapshot(){ return JSON.parse(localStorage.getItem("mf_rates_snapshot")||"{}"); }
+    function setSnapshot(obj){ localStorage.setItem("mf_rates_snapshot", JSON.stringify(obj)); }
+
+    function applyTexts(){
+      document.title = t("rates.page_title", "My Finance - Rates");
+      document.getElementById("title").textContent = t("rates.title", "Rates");
+      document.getElementById("subtitle").textContent = t("rates.subtitle", "Configure visible symbols and manual fallback values.");
+      document.getElementById("watchTitle").textContent = t("rates.watchlist", "Watchlist");
+      document.getElementById("manualTitle").textContent = t("rates.manual", "Manual Snapshot");
+      document.getElementById("configuredTitle").textContent = t("rates.configured", "Configured Symbols");
+      document.getElementById("addSymbolBtn").textContent = t("common.add", "Add");
+      document.getElementById("saveSnapshotBtn").textContent = t("common.save", "Save");
+      document.getElementById("symbolInput").placeholder = t("rates.symbol_placeholder", "BTC or USD/CZK");
+      document.getElementById("snapshotPrice").placeholder = t("rates.price", "Price");
+      document.getElementById("snapshotCurrency").placeholder = t("rates.currency", "Currency");
+    }
+
+    function render(){
+      const watch = getWatch();
+      const snap = getSnapshot();
+      document.getElementById("ratesTable").innerHTML = `<thead><tr><th>${t("rates.symbol","Symbol")}</th><th>${t("rates.price","Price")}</th><th>${t("rates.currency","Currency")}</th><th>${t("rates.last_update","Last update")}</th><th>${t("dashboard.table.actions","Actions")}</th></tr></thead><tbody>${watch.map((s)=>`<tr><td>${s}</td><td>${snap[s]?.price ?? "--"}</td><td>${snap[s]?.currency ?? "USD"}</td><td>${snap[s]?.updatedAt ?? t("rates.not_synced","not synced")}</td><td><button class="remove-rate" data-symbol="${s}" type="button">${t("common.delete","Delete")}</button></td></tr>`).join("")}</tbody>`;
+      document.getElementById("snapshotSymbol").innerHTML = watch.map((s)=>`<option value="${s}">${s}</option>`).join("");
+    }
+
+    document.getElementById("addSymbolBtn").addEventListener("click",()=>{
+      const input = document.getElementById("symbolInput");
+      const sym = input.value.trim().toUpperCase();
+      if(!sym) return;
+      const watch = getWatch();
+      watch.push(sym);
+      setWatch(watch);
+      input.value = "";
+      render();
+      MFUI.setMsg(t("rates.added", "Symbol added."));
+    });
+
+    document.getElementById("saveSnapshotBtn").addEventListener("click",()=>{
+      const sym = document.getElementById("snapshotSymbol").value;
+      const price = Number(document.getElementById("snapshotPrice").value);
+      const currency = (document.getElementById("snapshotCurrency").value || "USD").toUpperCase();
+      if(!sym || Number.isNaN(price)) return MFUI.setMsg(t("rates.select_symbol_price", "Select symbol and price."), true);
+      const snap = getSnapshot();
+      snap[sym] = { price, currency, updatedAt: new Date().toISOString() };
+      setSnapshot(snap);
+      render();
+      MFUI.setMsg(t("rates.saved", "Snapshot saved."));
+    });
+
+    document.getElementById("ratesTable").addEventListener("click",(e)=>{
+      const btn = e.target.closest(".remove-rate");
+      if(!btn) return;
+      const symbol = btn.dataset.symbol;
+      setWatch(getWatch().filter((s)=>s!==symbol));
+      const snap = getSnapshot();
+      delete snap[symbol];
+      setSnapshot(snap);
+      render();
+      MFUI.setMsg(t("rates.removed", "Symbol removed."));
+    });
+
+    (async()=>{
+      await MFUI.init();
+      applyTexts();
+      render();
+    })();
+  </script>
+</body>
+</html>

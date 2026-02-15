@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Finance - Transactions</title>
+  <link rel="stylesheet" href="/ui/common.css" />
+  <style>
+    .stack { display:grid; gap:8px; }
+    .inline { display:flex; gap:8px; align-items:center; }
+    .inline > * { flex:1; }
+    .icon-btn { padding:6px 10px; min-width:38px; }
+    .hint { cursor:help; border-bottom:1px dotted var(--muted); color:var(--muted); font-size:12px; }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.35);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      padding: 16px;
+    }
+    .modal {
+      width: min(680px, 100%);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="topbar">
+        <div class="top-left">
+          <h1 id="title">Transactions</h1>
+          <p id="subtitle">Accounts, transactions and transfers in one place.</p>
+          <div class="menu-row">
+            <a href="/ui/dashboard" id="navOverview">Overview</a>
+            <a class="active" href="/ui/transactions" id="navTransactions">Transactions</a>
+            <a href="/ui/savings-investments" id="navInvestments">Savings & Investments</a>
+            <a href="/ui/rates" id="navRates">Rates</a>
+            <a href="/ui/services" id="navServices">Services</a>
+            <a href="/ui/settings" id="navSettings">Settings</a>
+          </div>
+        </div>
+        <div class="top-actions">
+          <div class="user-menu">
+            <button id="userBtn" type="button">...</button>
+            <div class="dropdown" id="userMenu">
+              <a href="/ui/settings" id="menuSettingsLink">Settings</a>
+              <button id="logoutBtn" class="logout" type="button">Logout</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="msg" class="msg"></div>
+    </div>
+
+    <div class="card grid">
+      <div class="stack">
+        <h3 id="createAccountTitle">Create Account</h3>
+        <input id="accName" placeholder="Account name" />
+        <select id="accType"><option value="checking">checking</option><option value="cash">cash</option><option value="savings">savings</option><option value="crypto">crypto</option><option value="stocks">stocks</option><option value="custom">custom</option></select>
+        <input id="accTypeCustom" placeholder="Custom account type" style="display:none" />
+        <input id="accCurrency" value="CZK" />
+        <input id="accBalance" type="number" step="0.01" placeholder="Initial amount" />
+        <input id="accOpenedAt" type="date" />
+        <button id="accBtn" class="btn-primary" type="button">Create Account</button>
+      </div>
+
+      <div class="stack">
+        <h3 id="createTransactionTitle">Create Transaction</h3>
+        <select id="txAccount"></select>
+        <select id="txDirection"><option value="expense">expense</option><option value="income">income</option></select>
+        <input id="txAmount" type="number" step="0.01" value="100" />
+        <input id="txCurrency" value="CZK" />
+        <input id="txDate" type="date" />
+        <input id="txCategory" placeholder="Category (optional)" />
+        <input id="txNote" placeholder="Note (optional)" />
+        <div class="inline"><select id="txRecurringFrequency"><option value="">no recurrence</option><option value="daily">daily</option><option value="weekly">weekly</option><option value="monthly">monthly</option><option value="yearly">yearly</option></select><input id="txRecurringCount" type="number" min="1" max="365" value="1" /></div>
+        <label><input id="txTrackService" type="checkbox" /> <span id="trackServiceLabel">Shared service</span> <span class="hint" id="trackServiceHint" title="Marks this transaction as shared service repayment for overview and services section.">?</span></label>
+        <button id="txBtn" class="btn-primary" type="button">Create Transaction</button>
+      </div>
+
+      <div class="stack">
+        <h3 id="transferTitle">Transfer Between Accounts</h3>
+        <select id="transferFrom"></select>
+        <select id="transferTo"></select>
+        <input id="transferAmount" type="number" step="0.01" value="100" />
+        <input id="transferCurrency" value="CZK" />
+        <input id="transferDate" type="date" />
+        <button id="transferBtn" class="btn-primary" type="button">Transfer</button>
+      </div>
+    </div>
+
+    <div class="card"><h3 id="accountsTitle">Accounts</h3><div style="overflow:auto"><table id="accountsTable"></table></div></div>
+    <div class="card"><h3 id="transactionsTitle">Transactions</h3><div style="overflow:auto"><table id="transactionsTable"></table></div></div>
+
+    <footer id="footerText">Copyright (c) My-Finance. Experimental software. Verify data and recommendations before acting.</footer>
+  </div>
+
+  <div class="modal-backdrop" id="txEditModal">
+    <div class="modal">
+      <h3 id="txEditTitle">Edit transaction</h3>
+      <div class="grid">
+        <div><label id="txEditAccountLabel" for="txEditAccount">Account</label><select id="txEditAccount"></select></div>
+        <div><label id="txEditDirectionLabel" for="txEditDirection">Direction</label><select id="txEditDirection"><option value="expense">expense</option><option value="income">income</option></select></div>
+        <div><label id="txEditAmountLabel" for="txEditAmount">Amount</label><input id="txEditAmount" type="number" step="0.01" /></div>
+        <div><label id="txEditCurrencyLabel" for="txEditCurrency">Currency</label><input id="txEditCurrency" /></div>
+        <div><label id="txEditDateLabel" for="txEditDate">Date</label><input id="txEditDate" type="date" /></div>
+        <div><label id="txEditCategoryLabel" for="txEditCategory">Category</label><input id="txEditCategory" /></div>
+      </div>
+      <div><label id="txEditNoteLabel" for="txEditNote">Note</label><input id="txEditNote" /></div>
+      <div class="menu-row">
+        <button id="txEditSaveBtn" type="button" class="btn-primary">✅</button>
+        <button id="txEditCancelBtn" type="button">❌</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/ui/common.js"></script>
+  <script>
+    const t = (k, f="") => MFUI.t(k, f);
+    let accounts = [];
+    let transactions = [];
+    let editingTxId = null;
+
+    function isoFromDateInput(v){ return new Date(`${v}T12:00:00`).toISOString(); }
+
+    function applyTexts(){
+      document.title=t("transactions.page_title","My Finance - Transactions");
+      document.getElementById("title").textContent=t("transactions.title","Transactions");
+      document.getElementById("subtitle").textContent=t("transactions.subtitle","Accounts, transactions and transfers in one place.");
+      document.getElementById("createAccountTitle").textContent=t("transactions.create_account","Create Account");
+      document.getElementById("createTransactionTitle").textContent=t("transactions.create_transaction","Create Transaction");
+      document.getElementById("transferTitle").textContent=t("transactions.transfer_between","Transfer Between Accounts");
+      document.getElementById("trackServiceLabel").textContent=t("transactions.shared_service","Shared service");
+      document.getElementById("trackServiceHint").title=t("transactions.shared_service_hint","Marks this transaction as shared service repayment for overview and services section.");
+      document.getElementById("accountsTitle").textContent=t("transactions.accounts","Accounts");
+      document.getElementById("transactionsTitle").textContent=t("transactions.all_transactions","Transactions");
+      document.getElementById("accBtn").textContent=t("transactions.create_account","Create Account");
+      document.getElementById("txBtn").textContent=t("transactions.create_transaction","Create Transaction");
+      document.getElementById("transferBtn").textContent=t("transactions.transfer","Transfer");
+      document.getElementById("accName").placeholder=t("transactions.ph_account_name","Account name");
+      document.getElementById("accBalance").placeholder=t("transactions.ph_initial_amount","Initial amount");
+      document.getElementById("accTypeCustom").placeholder=t("transactions.ph_custom_type","Custom account type");
+      document.getElementById("txCategory").placeholder=t("transactions.ph_category","Category (optional)");
+      document.getElementById("txNote").placeholder=t("transactions.ph_note","Note (optional)");
+      const accType=document.getElementById("accType"); ["checking","cash","savings","crypto","stocks","custom"].forEach((v,i)=>accType.options[i].textContent=t(`account.type.${v}`,v));
+      const txDir=document.getElementById("txDirection"); txDir.options[0].textContent=t("transaction.direction.expense","expense"); txDir.options[1].textContent=t("transaction.direction.income","income");
+      const rf=document.getElementById("txRecurringFrequency"); rf.options[0].textContent=t("transactions.no_recurrence","no recurrence"); rf.options[1].textContent=t("transactions.daily","daily"); rf.options[2].textContent=t("transactions.weekly","weekly"); rf.options[3].textContent=t("transactions.monthly","monthly"); rf.options[4].textContent=t("transactions.yearly","yearly");
+      document.getElementById("txEditTitle").textContent=t("dashboard.edit.transaction","Edit transaction");
+      document.getElementById("txEditAccountLabel").textContent=t("dashboard.account","Account");
+      document.getElementById("txEditDirectionLabel").textContent=t("dashboard.table.direction","Direction");
+      document.getElementById("txEditAmountLabel").textContent=t("dashboard.table.amount","Amount");
+      document.getElementById("txEditCurrencyLabel").textContent=t("dashboard.table.currency","Currency");
+      document.getElementById("txEditDateLabel").textContent=t("dashboard.table.date","Date");
+      document.getElementById("txEditCategoryLabel").textContent=t("dashboard.table.category","Category");
+      document.getElementById("txEditNoteLabel").textContent=t("dashboard.table.note","Note");
+      const txEditDir=document.getElementById("txEditDirection"); txEditDir.options[0].textContent=t("transaction.direction.expense","expense"); txEditDir.options[1].textContent=t("transaction.direction.income","income");
+    }
+
+    function fillAccountSelects(){
+      const opts = accounts.map(a=>`<option value="${a.id}">${a.name} (${Number(a.currentBalance||0).toFixed(2)} ${a.currency})</option>`).join("");
+      ["txAccount","transferFrom","transferTo","txEditAccount"].forEach((id)=>{ document.getElementById(id).innerHTML = opts; });
+    }
+
+    function renderTables(){
+      document.getElementById("accountsTable").innerHTML = `<thead><tr><th>${t("dashboard.table.name","Name")}</th><th>${t("dashboard.table.type","Type")}</th><th>${t("dashboard.table.currency","Currency")}</th><th>${t("dashboard.table.balance","Balance")}</th><th>${t("dashboard.table.actions","Actions")}</th></tr></thead><tbody>${accounts.map((a)=>`<tr><td><input data-af="name" data-id="${a.id}" value="${a.name}"/></td><td><input data-af="accountType" data-id="${a.id}" value="${a.accountType}"/></td><td><input data-af="currency" data-id="${a.id}" value="${a.currency}"/></td><td>${Number(a.currentBalance||0).toFixed(2)}</td><td><button class="icon-btn save-account" title="${t("common.save","Save")}" data-id="${a.id}">💾</button> <button class="icon-btn delete-account" title="${t("common.delete","Delete")}" data-id="${a.id}">❌</button></td></tr>`).join("")}</tbody>`;
+      document.getElementById("transactionsTable").innerHTML = `<thead><tr><th>${t("dashboard.table.date","Date")}</th><th>${t("dashboard.account","Account")}</th><th>${t("dashboard.table.direction","Direction")}</th><th>${t("dashboard.table.amount","Amount")}</th><th>${t("dashboard.table.currency","Currency")}</th><th>${t("dashboard.table.category","Category")}</th><th>${t("dashboard.table.note","Note")}</th><th>${t("dashboard.table.actions","Actions")}</th></tr></thead><tbody>${transactions.map((tx)=>`<tr><td>${new Date(tx.occurredAt).toISOString().slice(0,10)}</td><td>${(accounts.find(a=>a.id===tx.accountId)||{}).name||"-"}</td><td>${t(`transaction.direction.${tx.direction}`,tx.direction)}</td><td>${Number(tx.amount||0).toFixed(2)}</td><td>${tx.currency}</td><td>${tx.category||""}</td><td>${tx.note||""}</td><td><button class="icon-btn edit-tx" title="${t("dashboard.edit.transaction","Edit transaction")}" data-id="${tx.id}">✏️</button></td></tr>`).join("")}</tbody>`;
+    }
+
+    async function refreshAll(){
+      [accounts, transactions] = await Promise.all([MFUI.api("/api/v1/accounts"), MFUI.api("/api/v1/transactions")]);
+      fillAccountSelects();
+      renderTables();
+    }
+
+    async function createAccount(){
+      const type = document.getElementById("accType").value === "custom" ? (document.getElementById("accTypeCustom").value.trim() || "custom") : document.getElementById("accType").value;
+      const openedAt = document.getElementById("accOpenedAt").value || new Date().toISOString().slice(0,10);
+      const amountRaw = Number(document.getElementById("accBalance").value);
+      const initialAmount = Number.isFinite(amountRaw) ? amountRaw : 0;
+      const created = await MFUI.api("/api/v1/accounts","POST",{
+        name:document.getElementById("accName").value,
+        accountType:type,
+        currency:document.getElementById("accCurrency").value,
+        initialBalance:0,
+        initialBalanceAt:isoFromDateInput(openedAt),
+      });
+      if(initialAmount !== 0){
+        await MFUI.api("/api/v1/transactions","POST",{
+          accountId:created.id,
+          direction:initialAmount > 0 ? "income" : "expense",
+          amount:Math.abs(initialAmount),
+          currency:document.getElementById("accCurrency").value,
+          occurredAt:isoFromDateInput(openedAt),
+          category:"initial_balance",
+          note:t("transactions.initial_balance_note","Initial balance"),
+        });
+      }
+      MFUI.setMsg(t("feedback.account_created","Account created."));
+      await refreshAll();
+    }
+
+    async function createTx(){
+      if(!document.getElementById("txAccount").value) throw new Error(t("error.create_account_first","Create account first."));
+      const txDate = document.getElementById("txDate").value || new Date().toISOString().slice(0,10);
+      const baseNote = document.getElementById("txNote").value || "";
+      const note = document.getElementById("txTrackService").checked ? `${baseNote}${baseNote?" | ":""}service:track` : (baseNote || null);
+      await MFUI.api("/api/v1/transactions","POST",{
+        accountId:document.getElementById("txAccount").value,
+        direction:document.getElementById("txDirection").value,
+        amount:Number(document.getElementById("txAmount").value||0),
+        currency:document.getElementById("txCurrency").value,
+        occurredAt:isoFromDateInput(txDate),
+        category:document.getElementById("txCategory").value||null,
+        note,
+        recurringFrequency:(document.getElementById("txRecurringFrequency").value||null),
+        recurringCount:Number(document.getElementById("txRecurringCount").value||1),
+      });
+      MFUI.setMsg(t("feedback.tx_created","Transaction created."));
+      await refreshAll();
+    }
+
+    async function createTransfer(){
+      if(!document.getElementById("transferFrom").value || !document.getElementById("transferTo").value) throw new Error(t("error.create_account_first","Create account first."));
+      const transferDate = document.getElementById("transferDate").value || new Date().toISOString().slice(0,10);
+      await MFUI.api("/api/v1/account-transfers","POST",{ fromAccountId:document.getElementById("transferFrom").value, toAccountId:document.getElementById("transferTo").value, amount:Number(document.getElementById("transferAmount").value||0), currency:document.getElementById("transferCurrency").value, occurredAt:isoFromDateInput(transferDate) });
+      MFUI.setMsg(t("transactions.transfer_created","Transfer created."));
+      await refreshAll();
+    }
+
+    async function saveAccountInline(id){
+      const fields = [...document.querySelectorAll(`[data-af][data-id="${id}"]`)];
+      const payload = {};
+      fields.forEach((f)=>payload[f.getAttribute("data-af")] = f.value);
+      await MFUI.api(`/api/v1/accounts/${id}`,"PUT",payload);
+      MFUI.setMsg(t("feedback.saved","Saved."));
+      await refreshAll();
+    }
+
+    async function deleteAccount(id){
+      if(!confirm(t("transactions.delete_account_confirm","Do you really want to delete this account?"))) return;
+      await MFUI.api(`/api/v1/accounts/${id}?action=delete_transactions`,"DELETE");
+      MFUI.setMsg(t("transactions.account_deleted","Account deleted."));
+      await refreshAll();
+    }
+
+    function openTxEditor(id){
+      const tx = transactions.find((x)=>x.id === id);
+      if(!tx) return;
+      editingTxId = id;
+      document.getElementById("txEditAccount").value = tx.accountId;
+      document.getElementById("txEditDirection").value = tx.direction;
+      document.getElementById("txEditAmount").value = Number(tx.amount || 0);
+      document.getElementById("txEditCurrency").value = tx.currency || "";
+      document.getElementById("txEditDate").value = new Date(tx.occurredAt).toISOString().slice(0,10);
+      document.getElementById("txEditCategory").value = tx.category || "";
+      document.getElementById("txEditNote").value = tx.note || "";
+      document.getElementById("txEditModal").style.display = "flex";
+    }
+
+    function closeTxEditor(){
+      editingTxId = null;
+      document.getElementById("txEditModal").style.display = "none";
+    }
+
+    async function saveTxEditor(){
+      if(!editingTxId) return;
+      await MFUI.api(`/api/v1/transactions/${editingTxId}`, "PUT", {
+        accountId: document.getElementById("txEditAccount").value,
+        direction: document.getElementById("txEditDirection").value,
+        amount: Number(document.getElementById("txEditAmount").value || 0),
+        currency: document.getElementById("txEditCurrency").value,
+        occurredAt: isoFromDateInput(document.getElementById("txEditDate").value || new Date().toISOString().slice(0,10)),
+        category: document.getElementById("txEditCategory").value || null,
+        note: document.getElementById("txEditNote").value || null,
+      });
+      closeTxEditor();
+      MFUI.setMsg(t("feedback.saved","Saved."));
+      await refreshAll();
+    }
+
+    document.getElementById("accType").addEventListener("change",(e)=>{ document.getElementById("accTypeCustom").style.display = e.target.value === "custom" ? "block" : "none"; });
+    document.getElementById("accBtn").addEventListener("click",()=>createAccount().catch((e)=>MFUI.setMsg(String(e.message||e),true)));
+    document.getElementById("txBtn").addEventListener("click",()=>createTx().catch((e)=>MFUI.setMsg(String(e.message||e),true)));
+    document.getElementById("transferBtn").addEventListener("click",()=>createTransfer().catch((e)=>MFUI.setMsg(String(e.message||e),true)));
+    document.getElementById("accountsTable").addEventListener("click",(e)=>{
+      const saveBtn=e.target.closest(".save-account");
+      if(saveBtn) return saveAccountInline(saveBtn.dataset.id).catch((er)=>MFUI.setMsg(String(er.message||er),true));
+      const delBtn=e.target.closest(".delete-account");
+      if(delBtn) return deleteAccount(delBtn.dataset.id).catch((er)=>MFUI.setMsg(String(er.message||er),true));
+    });
+    document.getElementById("transactionsTable").addEventListener("click",(e)=>{
+      const editBtn=e.target.closest(".edit-tx");
+      if(!editBtn) return;
+      openTxEditor(editBtn.dataset.id);
+    });
+    document.getElementById("txEditCancelBtn").addEventListener("click", closeTxEditor);
+    document.getElementById("txEditSaveBtn").addEventListener("click", ()=>saveTxEditor().catch((e)=>MFUI.setMsg(String(e.message||e),true)));
+    document.getElementById("txEditModal").addEventListener("click", (e)=>{ if(e.target.id === "txEditModal") closeTxEditor(); });
+
+    (async()=>{
+      await MFUI.init();
+      applyTexts();
+      const today = new Date().toISOString().slice(0,10);
+      document.getElementById("accOpenedAt").value = today;
+      document.getElementById("txDate").value = today;
+      document.getElementById("transferDate").value = today;
+      const safeRefresh = () => refreshAll().catch((e)=>MFUI.setMsg(String(e.message||e),true));
+      await safeRefresh();
+      MFUI.periodicRefresh(safeRefresh, 60000);
+    })().catch((e)=>MFUI.setMsg(String(e.message||e),true));
+  </script>
+</body>
+</html>
