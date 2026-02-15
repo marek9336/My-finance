@@ -128,7 +128,6 @@ window.MFUI = (function () {
       navInvestments: t("common.savings_investments", "Savings & Investments"),
       navRates: t("common.rates", "Rates"),
       navServices: t("common.services", "Services"),
-      navSettings: t("common.settings", "Settings"),
       menuSettingsLink: t("common.settings", "Settings"),
     };
     Object.entries(map).forEach(([id, val]) => {

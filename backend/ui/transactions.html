@@ -9,6 +9,8 @@
     .stack { display:grid; gap:8px; }
     .inline { display:flex; gap:8px; align-items:center; }
     .inline > * { flex:1; }
+    .inline-check { display:flex; align-items:center; gap:8px; }
+    .inline-check input[type="checkbox"] { width:auto; margin:0; }
     .icon-btn { padding:6px 10px; min-width:38px; }
     .hint { cursor:help; border-bottom:1px dotted var(--muted); color:var(--muted); font-size:12px; }
     .modal-backdrop {
@@ -44,8 +46,7 @@
             <a href="/ui/savings-investments" id="navInvestments">Savings & Investments</a>
             <a href="/ui/rates" id="navRates">Rates</a>
             <a href="/ui/services" id="navServices">Services</a>
-            <a href="/ui/settings" id="navSettings">Settings</a>
-          </div>
+            </div>
         </div>
         <div class="top-actions">
           <div class="user-menu">
@@ -82,7 +83,7 @@
         <input id="txCategory" placeholder="Category (optional)" />
         <input id="txNote" placeholder="Note (optional)" />
         <div class="inline"><select id="txRecurringFrequency"><option value="">no recurrence</option><option value="daily">daily</option><option value="weekly">weekly</option><option value="monthly">monthly</option><option value="yearly">yearly</option></select><input id="txRecurringCount" type="number" min="1" max="365" value="1" /></div>
-        <label><input id="txTrackService" type="checkbox" /> <span id="trackServiceLabel">Shared service</span> <span class="hint" id="trackServiceHint" title="Marks this transaction as shared service repayment for overview and services section.">?</span></label>
+        <label class="inline-check"><input id="txTrackService" type="checkbox" /> <span id="trackServiceLabel">Shared service</span> <span class="hint" id="trackServiceHint" title="Marks this transaction as shared service repayment for overview and services section.">?</span></label>
         <button id="txBtn" class="btn-primary" type="button">Create Transaction</button>
       </div>
 
@@ -319,3 +320,4 @@
   </script>
 </body>
 </html>
+
